@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import fetch from 'node-fetch';
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -18,43 +17,27 @@ app.use((req, res, next) => {
 app.get('/', (_, res) => res.send('OK'));
 
 /**
- * Create OpenAI Realtime session and return ephemeral credentials
+ * Return ephemeral credentials for WebRTC connection
+ * For OpenAI Realtime API, the client uses the API key as Bearer token
  */
 app.get('/api/ephemeral', async (req, res) => {
   try {
-    const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
+    // Return the API key as client_secret for the client to use
+    const client_secret = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
+    const endpoint = 'https://api.openai.com/v1/realtime';
 
-    console.log('Creating OpenAI Realtime session...');
-
-    // Create ephemeral session with OpenAI
-    const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model,
-        voice: 'alloy'
-      })
-    });
-
-    if (!sessionResponse.ok) {
-      const errorText = await sessionResponse.text();
-      console.error('OpenAI session creation failed:', sessionResponse.status, errorText);
-      throw new Error(`Failed to create session: ${sessionResponse.status} - ${errorText}`);
+    if (!client_secret) {
+      throw new Error('OPENAI_API_KEY not configured');
     }
 
-    const sessionData = await sessionResponse.json();
-    console.log('Session created successfully');
-
     res.json({
-      client_secret: sessionData.client_secret.value,
-      model: model,
-      endpoint: 'https://api.openai.com/v1/realtime'
+      client_secret,
+      model,
+      endpoint
     });
   } catch (e) {
-    console.error('Error creating ephemeral token:', e);
+    console.error('Error returning ephemeral token:', e);
     res.status(500).json({ error: String(e.message || e) });
   }
 });
