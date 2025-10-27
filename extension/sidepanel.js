@@ -166,25 +166,28 @@ async function connectRealtime() {
 
       // Configure session with desktop commander instructions if enabled
       const instructions = isDesktopMode
-        ? `You are Atlas Voice, an AI assistant with desktop automation capabilities. You can help users control their computer through voice commands.
+        ? `You are Atlas Voice with desktop automation. Keep responses SHORT and CONCISE.
 
-When users ask you to perform desktop tasks, respond naturally AND include a special command tag:
+When executing commands, use brief confirmations:
 
-For opening folders: Say your response and include [CMD:OPEN_FOLDER:path/to/folder]
-For creating files: Say your response and include [CMD:CREATE_FILE:path/to/file.txt]
-For finding files: Say your response and include [CMD:FIND_FILE:filename]
-For launching apps: Say your response and include [CMD:LAUNCH_APP:AppName]
-For listing files: Say your response and include [CMD:LIST_FILES:directory/path]
+Opening folders: "Opening [folder name]. [CMD:OPEN_FOLDER:path]"
+Creating files: "Creating [filename]. [CMD:CREATE_FILE:path/file.txt]"
+Finding files: "Searching for [name]. [CMD:FIND_FILE:filename]"
+Launching apps: "Launching [app]. [CMD:LAUNCH_APP:AppName]"
+Listing files: "Listing files. [CMD:LIST_FILES:directory]"
 
-Example:
-User: "Can you open my Downloads folder?"
-You: "Sure! I'll open your Downloads folder for you. [CMD:OPEN_FOLDER:~/Downloads]"
+Examples:
+User: "Open Downloads"
+You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
 User: "Launch Chrome"
-You: "Opening Google Chrome now. [CMD:LAUNCH_APP:Google Chrome]"
+You: "Launching Chrome. [CMD:LAUNCH_APP:Google Chrome]"
 
-Be conversational and friendly while executing these commands.`
-        : `You are Atlas Voice, a helpful AI assistant. Have natural conversations with users.`;
+User: "What's the weather?"
+You: "I cannot check weather, but I can open apps or folders for you."
+
+Keep ALL responses under 10 words unless asked for details.`
+        : `You are Atlas Voice, a helpful AI assistant. Keep responses concise and natural.`;
 
       // Send session update with instructions
       dataChannel.send(JSON.stringify({
@@ -421,25 +424,25 @@ els.desktopMode.addEventListener('change', () => {
   // If already connected, update session instructions
   if (connected && dataChannel && dataChannel.readyState === 'open') {
     const instructions = isDesktopMode
-      ? `You are Atlas Voice, an AI assistant with desktop automation capabilities. You can help users control their computer through voice commands.
+      ? `You are Atlas Voice with desktop automation. Keep responses SHORT and CONCISE.
 
-When users ask you to perform desktop tasks, respond naturally AND include a special command tag:
+When executing commands, use brief confirmations:
 
-For opening folders: Say your response and include [CMD:OPEN_FOLDER:path/to/folder]
-For creating files: Say your response and include [CMD:CREATE_FILE:path/to/file.txt]
-For finding files: Say your response and include [CMD:FIND_FILE:filename]
-For launching apps: Say your response and include [CMD:LAUNCH_APP:AppName]
-For listing files: Say your response and include [CMD:LIST_FILES:directory/path]
+Opening folders: "Opening [folder name]. [CMD:OPEN_FOLDER:path]"
+Creating files: "Creating [filename]. [CMD:CREATE_FILE:path/file.txt]"
+Finding files: "Searching for [name]. [CMD:FIND_FILE:filename]"
+Launching apps: "Launching [app]. [CMD:LAUNCH_APP:AppName]"
+Listing files: "Listing files. [CMD:LIST_FILES:directory]"
 
-Example:
-User: "Can you open my Downloads folder?"
-You: "Sure! I'll open your Downloads folder for you. [CMD:OPEN_FOLDER:~/Downloads]"
+Examples:
+User: "Open Downloads"
+You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
 User: "Launch Chrome"
-You: "Opening Google Chrome now. [CMD:LAUNCH_APP:Google Chrome]"
+You: "Launching Chrome. [CMD:LAUNCH_APP:Google Chrome]"
 
-Be conversational and friendly while executing these commands.`
-      : `You are Atlas Voice, a helpful AI assistant. Have natural conversations with users.`;
+Keep ALL responses under 10 words unless asked for details.`
+      : `You are Atlas Voice, a helpful AI assistant. Keep responses concise and natural.`;
 
     dataChannel.send(JSON.stringify({
       type: 'session.update',
@@ -494,14 +497,24 @@ function parseDesktopCommand(text) {
 // Execute desktop command via server
 async function executeDesktopCommand(command) {
   try {
-    const response = await fetch(`${els.serverUrl.value.trim()}/api/desktop`, {
+    const serverUrl = els.serverUrl.value.trim();
+
+    // Check if using Vercel (which can't execute desktop commands)
+    if (serverUrl.includes('vercel.app')) {
+      return {
+        error: 'Desktop Commander requires local server. Please run: cd server && npm install && npm run dev, then change Server URL to http://localhost:8787'
+      };
+    }
+
+    const response = await fetch(`${serverUrl}/api/desktop`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(command)
     });
 
     if (!response.ok) {
-      throw new Error(`Command failed: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Command failed: ${response.status}`);
     }
 
     const result = await response.json();
