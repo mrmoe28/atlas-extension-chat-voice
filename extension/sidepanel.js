@@ -208,7 +208,10 @@ async function connectRealtime() {
     const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
     await pc.setLocalDescription(offer);
 
-    const sdpResponse = await fetch(endpoint, {
+    // Add model as query parameter to the endpoint
+    const realtimeUrl = `${endpoint}?model=${model}`;
+
+    const sdpResponse = await fetch(realtimeUrl, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${client_secret}`,

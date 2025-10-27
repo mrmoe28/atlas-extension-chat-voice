@@ -30,12 +30,15 @@ app.get('/api/ephemeral', async (req, res) => {
   try {
     // Return the API key as client_secret for the client to use
     const client_secret = (process.env.OPENAI_API_KEY || '').trim();
+    // Use the latest Realtime API model
     const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
     const endpoint = 'https://api.openai.com/v1/realtime';
 
     if (!client_secret) {
       throw new Error('OPENAI_API_KEY not configured');
     }
+
+    console.log(`Providing credentials for model: ${model}`);
 
     res.json({
       client_secret,
