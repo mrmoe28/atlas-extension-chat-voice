@@ -48,7 +48,7 @@ let lastScreenshot = null;
 
 // Hamburger menu toggle
 els.menuBtn.addEventListener('click', () => {
-  document.querySelector('.settings-panel').classList.toggle('open');
+  document.querySelector('.settings-dropdown').classList.toggle('open');
   els.menuBtn.classList.toggle('active');
 });
 
@@ -1285,7 +1285,7 @@ els.connectBtn.addEventListener('click', async () => {
   if (!connected) {
     await connectRealtime();
     // Close menu after connecting
-    document.querySelector('.settings-panel').classList.remove('open');
+    document.querySelector('.settings-dropdown').classList.remove('open');
     els.menuBtn.classList.remove('active');
   } else {
     teardown();
