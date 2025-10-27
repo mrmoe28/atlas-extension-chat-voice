@@ -7,10 +7,12 @@
   --brand: #4aa3ff;
   --brand-hover: #3a93ef;
   --user-bubble: #2d5bf5;
-  --ai-bubble: #7c3aed; /* Purple for AI */
+  --ai-bubble: #7c3aed;
   --border: #2a2d38;
   --success: #10b981;
   --error: #ef4444;
+  --header-height: 60px;
+  --footer-height: 120px;
 }
 
 * {
@@ -24,6 +26,8 @@ body {
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
+  height: 100vh;
+  width: 100vw;
 }
 
 .app {
@@ -32,19 +36,25 @@ body {
   height: 100vh;
   width: 100%;
   position: relative;
+  overflow: hidden;
 }
 
-/* Header with Hamburger */
-header {
+/* ========================================
+   FIXED HEADER
+   ======================================== */
+.header-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 12px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 100;
+  z-index: 200;
 }
 
 .menu-btn {
@@ -99,22 +109,26 @@ h1 {
   50% { opacity: 0.6; }
 }
 
-/* Settings Dropdown */
-.settings-dropdown {
-  position: absolute;
-  top: 60px;
+/* ========================================
+   SETTINGS PANEL (Slides down from header)
+   ======================================== */
+.settings-panel {
+  position: fixed;
+  top: var(--header-height);
   left: 0;
   right: 0;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   max-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   transition: max-height 0.3s ease-out;
-  z-index: 99;
+  z-index: 150;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.settings-dropdown.open {
-  max-height: 500px;
+.settings-panel.open {
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .settings-content {
@@ -247,34 +261,44 @@ h1 {
   cursor: not-allowed;
 }
 
-/* Main Content */
-.main-content {
-  flex: 1;
+/* ========================================
+   CONTENT AREA (Between header and footer)
+   ======================================== */
+.content-area {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  bottom: var(--footer-height);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
+  background: var(--bg);
+  z-index: 1;
 }
 
-/* Large Centered Voice Orb */
-.voice-orb-wrapper {
+/* ========================================
+   VOICE ORB (Centered in content area)
+   ======================================== */
+.orb-container {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 80px;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 24px;
-  transition: opacity 0.3s;
-  z-index: 1;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 10;
 }
 
-.voice-orb-wrapper.hidden {
+.orb-container.hidden {
   opacity: 0;
   pointer-events: none;
+  transform: scale(0.9);
 }
 
 .voice-orb-large {
@@ -387,18 +411,25 @@ h1 {
   color: var(--text-muted);
   text-align: center;
   max-width: 80%;
+  padding: 0 20px;
 }
 
-/* Chat Container */
+/* ========================================
+   CHAT CONTAINER (Replaces orb)
+   ======================================== */
 .chat-container {
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow-y: auto;
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   scroll-behavior: smooth;
-  z-index: 2;
+  z-index: 10;
 }
 
 .chat-container::-webkit-scrollbar {
@@ -503,16 +534,24 @@ h1 {
   30% { opacity: 1; transform: translateY(-10px); }
 }
 
-/* Voice Footer */
-.voice-footer {
+/* ========================================
+   FIXED FOOTER (Voice button)
+   ======================================== */
+.footer-fixed {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--footer-height);
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex-shrink: 0;
+  z-index: 100;
 }
 
 .voice-btn-large {
@@ -561,7 +600,9 @@ h1 {
   color: var(--text-muted);
 }
 
-/* Permission Modal */
+/* ========================================
+   PERMISSION MODAL
+   ======================================== */
 .permission-modal {
   position: fixed;
   top: 0;

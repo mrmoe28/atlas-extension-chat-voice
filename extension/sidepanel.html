@@ -8,8 +8,8 @@
 </head>
 <body>
   <div class="app">
-    <!-- Header with hamburger menu -->
-    <header>
+    <!-- Fixed Header -->
+    <header class="header-fixed">
       <button class="menu-btn" id="menuBtn">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="3" y1="12" x2="21" y2="12"/>
@@ -23,8 +23,8 @@
       </div>
     </header>
 
-    <!-- Settings Dropdown -->
-    <div class="settings-dropdown" id="settingsDropdown">
+    <!-- Settings Panel (Slides from top) -->
+    <div class="settings-panel" id="settingsDropdown">
       <div class="settings-content">
         <div class="setting-item">
           <label>Server URL</label>
@@ -68,10 +68,10 @@
       </div>
     </div>
 
-    <!-- Main content area -->
-    <div class="main-content">
-      <!-- Centered Voice Orb -->
-      <div class="voice-orb-wrapper" id="voiceOrbWrapper">
+    <!-- Main Content Container (Always visible, settings slides over it) -->
+    <div class="content-area">
+      <!-- Centered Voice Orb (Always centered in remaining space) -->
+      <div class="orb-container" id="voiceOrbWrapper">
         <div class="voice-orb-large" id="voiceOrb">
           <div class="orb-inner"></div>
           <div class="orb-ring"></div>
@@ -81,14 +81,14 @@
         <p class="orb-status" id="orbStatus">Click Connect in menu to start</p>
       </div>
 
-      <!-- Chat Messages (appears when conversation starts) -->
+      <!-- Chat Messages (Replaces orb when conversation starts) -->
       <div class="chat-container" id="chatContainer" style="display:none;">
         <!-- Messages will be added here dynamically -->
       </div>
     </div>
 
-    <!-- Bottom voice button -->
-    <footer class="voice-footer">
+    <!-- Fixed Footer with Voice Button -->
+    <footer class="footer-fixed">
       <button id="voiceBtn" class="voice-btn-large" disabled>
         <div class="mic-icon-large">
           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
