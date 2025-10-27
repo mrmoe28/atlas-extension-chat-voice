@@ -8,61 +8,77 @@
 </head>
 <body>
   <div class="app">
-    <!-- Header -->
+    <!-- Header with hamburger menu -->
     <header>
-      <div class="header-content">
-        <h1>Atlas Voice</h1>
-        <div class="connection-status">
-          <span class="status-dot" id="statusDot"></span>
-          <span id="status">disconnected</span>
-        </div>
+      <button class="menu-btn" id="menuBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <h1>Atlas Voice</h1>
+      <div class="connection-status">
+        <span class="status-dot" id="statusDot"></span>
       </div>
     </header>
 
-    <!-- Chat Messages -->
-    <div class="chat-container" id="chatContainer">
-      <div class="welcome-message">
-        <div class="voice-orb-container">
-          <div class="voice-orb" id="voiceOrb">
-            <div class="orb-inner"></div>
-            <div class="orb-ring"></div>
-            <div class="orb-ring ring-2"></div>
-          </div>
+    <!-- Settings Dropdown -->
+    <div class="settings-dropdown" id="settingsDropdown">
+      <div class="settings-content">
+        <div class="setting-item">
+          <label>Server URL</label>
+          <input id="serverUrl"
+                 value="https://atlas-extension-chat-voice.vercel.app"
+                 placeholder="Server URL"
+                 class="server-input" />
         </div>
-        <p class="welcome-text">Click Connect to start a voice conversation</p>
+
+        <div class="setting-item">
+          <label class="mode-toggle">
+            <input type="checkbox" id="continuousMode" />
+            <span>Continuous mode</span>
+          </label>
+        </div>
+
+        <div class="setting-actions">
+          <button id="connectBtn" class="connect-btn">Connect</button>
+          <button id="interruptBtn" class="interrupt-btn" disabled>Stop</button>
+        </div>
       </div>
-      <!-- Messages will be added here dynamically -->
     </div>
 
-    <!-- Controls Footer -->
-    <footer class="controls">
-      <div class="control-row">
-        <input id="serverUrl"
-               value="https://atlas-extension-chat-voice.vercel.app"
-               placeholder="Server URL"
-               class="server-input" />
-        <button id="connectBtn" class="connect-btn">Connect</button>
+    <!-- Main content area -->
+    <div class="main-content">
+      <!-- Centered Voice Orb -->
+      <div class="voice-orb-wrapper" id="voiceOrbWrapper">
+        <div class="voice-orb-large" id="voiceOrb">
+          <div class="orb-inner"></div>
+          <div class="orb-ring"></div>
+          <div class="orb-ring ring-2"></div>
+          <div class="orb-ring ring-3"></div>
+        </div>
+        <p class="orb-status" id="orbStatus">Click Connect in menu to start</p>
       </div>
 
-      <div class="voice-controls">
-        <button id="voiceBtn" class="voice-btn" disabled>
-          <div class="mic-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" x2="12" y1="19" y2="22"/>
-            </svg>
-          </div>
-          <span id="voiceBtnText">Hold to talk</span>
-        </button>
-
-        <label class="mode-toggle">
-          <input type="checkbox" id="continuousMode" />
-          <span>Continuous</span>
-        </label>
-
-        <button id="interruptBtn" class="interrupt-btn" disabled>Stop</button>
+      <!-- Chat Messages (appears when conversation starts) -->
+      <div class="chat-container" id="chatContainer" style="display:none;">
+        <!-- Messages will be added here dynamically -->
       </div>
+    </div>
+
+    <!-- Bottom voice button -->
+    <footer class="voice-footer">
+      <button id="voiceBtn" class="voice-btn-large" disabled>
+        <div class="mic-icon-large">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+      </button>
+      <span id="voiceStatus" class="voice-status">Hold to talk</span>
     </footer>
 
     <!-- Hidden Web Speech Fallback -->
@@ -71,6 +87,33 @@
       <button id="recStart">Start STT</button>
       <button id="recStop">Stop STT</button>
       <button id="ttsSay">Speak</button>
+    </div>
+
+    <!-- Permission Popup Modal -->
+    <div class="permission-modal" id="permissionModal">
+      <div class="permission-content">
+        <h2>Welcome to Atlas Voice!</h2>
+        <p>To use voice features, Atlas Voice needs microphone access.</p>
+        <div class="permission-steps">
+          <div class="permission-step">
+            <div class="step-number">1</div>
+            <div class="step-text">Click "Allow Microphone" below</div>
+          </div>
+          <div class="permission-step">
+            <div class="step-number">2</div>
+            <div class="step-text">Click "Allow" when your browser prompts for permission</div>
+          </div>
+          <div class="permission-step">
+            <div class="step-number">3</div>
+            <div class="step-text">Connect to server and start chatting!</div>
+          </div>
+        </div>
+        <div class="permission-actions">
+          <button id="requestPermissionBtn" class="permission-btn primary">Allow Microphone</button>
+          <button id="skipPermissionBtn" class="permission-btn secondary">Maybe Later</button>
+        </div>
+        <p class="permission-note">You can change permissions anytime in your browser settings</p>
+      </div>
     </div>
   </div>
 

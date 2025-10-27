@@ -23,7 +23,7 @@ app.get('/', (_, res) => res.send('OK'));
 app.get('/api/ephemeral', async (req, res) => {
   try {
     // Return the API key as client_secret for the client to use
-    const client_secret = process.env.OPENAI_API_KEY;
+    const client_secret = (process.env.OPENAI_API_KEY || '').trim();
     const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
     const endpoint = 'https://api.openai.com/v1/realtime';
 

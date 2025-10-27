@@ -1,23 +1,28 @@
 /**
- * Atlas Voice - Chat Interface with Animated Voice Orb
+ * Atlas Voice - Minimal Interface with Hamburger Menu
  */
 
 const els = {
+  menuBtn: document.getElementById('menuBtn'),
+  settingsDropdown: document.getElementById('settingsDropdown'),
   serverUrl: document.getElementById('serverUrl'),
   connectBtn: document.getElementById('connectBtn'),
-  status: document.getElementById('status'),
   statusDot: document.getElementById('statusDot'),
   voiceBtn: document.getElementById('voiceBtn'),
-  voiceBtnText: document.getElementById('voiceBtnText'),
+  voiceStatus: document.getElementById('voiceStatus'),
   interruptBtn: document.getElementById('interruptBtn'),
   continuousMode: document.getElementById('continuousMode'),
   chatContainer: document.getElementById('chatContainer'),
   voiceOrb: document.getElementById('voiceOrb'),
-  welcomeMessage: document.querySelector('.welcome-message'),
+  voiceOrbWrapper: document.getElementById('voiceOrbWrapper'),
+  orbStatus: document.getElementById('orbStatus'),
   voiceSelect: document.getElementById('voiceSelect'),
   recStart: document.getElementById('recStart'),
   recStop: document.getElementById('recStop'),
-  ttsSay: document.getElementById('ttsSay')
+  ttsSay: document.getElementById('ttsSay'),
+  permissionModal: document.getElementById('permissionModal'),
+  requestPermissionBtn: document.getElementById('requestPermissionBtn'),
+  skipPermissionBtn: document.getElementById('skipPermissionBtn')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -26,6 +31,12 @@ let isSpeaking = false;
 let isContinuousMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
+
+// Hamburger menu toggle
+els.menuBtn.addEventListener('click', () => {
+  els.settingsDropdown.classList.toggle('open');
+  els.menuBtn.classList.toggle('active');
+});
 
 async function getEphemeralToken(serverBase) {
   const r = await fetch(`${serverBase}/api/ephemeral`);
@@ -47,7 +58,6 @@ function createRemoteAudio() {
   remoteAudioEl.playsInline = true;
   document.body.appendChild(remoteAudioEl);
 
-  // Detect when AI is speaking
   remoteAudioEl.onplay = () => {
     isSpeaking = true;
     updateOrbState();
@@ -71,16 +81,21 @@ function updateOrbState() {
 
   if (isSpeaking) {
     els.voiceOrb.classList.add('speaking');
+    els.orbStatus.textContent = 'AI is speaking...';
   } else if (isListening) {
     els.voiceOrb.classList.add('listening');
+    els.orbStatus.textContent = 'Listening...';
+  } else if (connected) {
+    els.orbStatus.textContent = 'Ready - Hold button to talk';
   }
 }
 
 function addMessage(role, content) {
   if (!content || content.trim() === '') return;
 
-  // Hide welcome message
-  els.welcomeMessage.classList.add('hidden');
+  // Hide orb, show chat
+  els.voiceOrbWrapper.classList.add('hidden');
+  els.chatContainer.style.display = 'flex';
 
   const messageEl = document.createElement('div');
   messageEl.className = `message ${role}`;
@@ -128,7 +143,7 @@ function removeTypingIndicator() {
 
 async function connectRealtime() {
   try {
-    els.status.textContent = 'connecting…';
+    els.orbStatus.textContent = 'Connecting...';
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
     await ensureMic();
 
@@ -144,7 +159,6 @@ async function connectRealtime() {
         const msg = JSON.parse(e.data);
         console.log('Server event:', msg);
 
-        // Handle different event types
         if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           if (msg.transcript && currentUserMessage !== msg.transcript) {
             currentUserMessage = msg.transcript;
@@ -192,7 +206,7 @@ async function connectRealtime() {
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
     connected = true;
-    els.status.textContent = 'connected';
+    els.orbStatus.textContent = 'Ready - Hold button to talk';
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
     els.voiceBtn.disabled = false;
@@ -200,7 +214,7 @@ async function connectRealtime() {
     els.connectBtn.classList.add('connected');
   } catch (err) {
     console.error(err);
-    els.status.textContent = `error: ${err.message}`;
+    els.orbStatus.textContent = `Error: ${err.message}`;
     connected = false;
   }
 }
@@ -226,7 +240,7 @@ function teardown() {
   isListening = false;
   isSpeaking = false;
 
-  els.status.textContent = 'disconnected';
+  els.orbStatus.textContent = 'Click Connect in menu to start';
   els.statusDot.classList.remove('connected');
   els.interruptBtn.disabled = true;
   els.voiceBtn.disabled = true;
@@ -241,6 +255,7 @@ function enableMic() {
   for (const t of micStream.getAudioTracks()) t.enabled = true;
   isListening = true;
   els.voiceBtn.classList.add('active');
+  els.voiceStatus.textContent = 'Listening...';
   updateOrbState();
 }
 
@@ -249,6 +264,7 @@ function disableMic() {
   for (const t of micStream.getAudioTracks()) t.enabled = false;
   isListening = false;
   els.voiceBtn.classList.remove('active');
+  els.voiceStatus.textContent = isContinuousMode ? 'Click to talk' : 'Hold to talk';
   updateOrbState();
 }
 
@@ -277,10 +293,8 @@ function setupContinuousMode() {
 
     if (isListening) {
       disableMic();
-      els.voiceBtnText.textContent = 'Click to talk';
     } else {
       enableMic();
-      els.voiceBtnText.textContent = 'Listening...';
     }
   });
 }
@@ -293,17 +307,16 @@ els.continuousMode.addEventListener('change', () => {
     disableMic();
   }
 
-  if (isContinuousMode) {
-    els.voiceBtnText.textContent = 'Click to talk';
-  } else {
-    els.voiceBtnText.textContent = 'Hold to talk';
-  }
+  els.voiceStatus.textContent = isContinuousMode ? 'Click to talk' : 'Hold to talk';
 });
 
 // Connection button
 els.connectBtn.addEventListener('click', async () => {
   if (!connected) {
     await connectRealtime();
+    // Close menu after connecting
+    els.settingsDropdown.classList.remove('open');
+    els.menuBtn.classList.remove('active');
   } else {
     teardown();
   }
@@ -375,8 +388,54 @@ function webSpeechFallbackSetup() {
   });
 }
 
+// Permission Modal Logic
+async function checkFirstTimeUse() {
+  // Check if user has seen the permission modal before
+  const hasSeenModal = localStorage.getItem('atlasVoice_hasSeenPermissionModal');
+
+  if (!hasSeenModal) {
+    // Show the modal on first use
+    els.permissionModal.classList.add('show');
+  }
+}
+
+els.requestPermissionBtn.addEventListener('click', async () => {
+  try {
+    // Request microphone permission
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // Mark as seen
+    localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
+
+    // Hide modal
+    els.permissionModal.classList.remove('show');
+
+    // Update status
+    els.orbStatus.textContent = 'Microphone access granted! Click Connect in menu to start';
+  } catch (err) {
+    console.error('Permission denied:', err);
+    els.orbStatus.textContent = 'Microphone permission denied. Please enable in browser settings';
+
+    // Still mark as seen so it doesn't show every time
+    localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
+    els.permissionModal.classList.remove('show');
+  }
+});
+
+els.skipPermissionBtn.addEventListener('click', () => {
+  // Mark as seen
+  localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
+
+  // Hide modal
+  els.permissionModal.classList.remove('show');
+
+  // Update status
+  els.orbStatus.textContent = 'Click Connect in menu to start (microphone permission needed)';
+});
+
 // Initialize
 setupPressToTalk();
 setupContinuousMode();
 webSpeechFallbackSetup();
 updateOrbState();
+checkFirstTimeUse();
