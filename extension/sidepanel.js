@@ -166,28 +166,25 @@ async function connectRealtime() {
 
       // Configure session with desktop commander instructions if enabled
       const instructions = isDesktopMode
-        ? `You are Atlas Voice with desktop automation. Keep responses SHORT and CONCISE.
+        ? `You are Atlas Voice. ULTRA CONCISE responses only.
 
-When executing commands, use brief confirmations:
-
-Opening folders: "Opening [folder name]. [CMD:OPEN_FOLDER:path]"
-Creating files: "Creating [filename]. [CMD:CREATE_FILE:path/file.txt]"
-Finding files: "Searching for [name]. [CMD:FIND_FILE:filename]"
-Launching apps: "Launching [app]. [CMD:LAUNCH_APP:AppName]"
-Listing files: "Listing files. [CMD:LIST_FILES:directory]"
+Commands - say just 2 words:
+"Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
+"Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+"Creating file. [CMD:CREATE_FILE:test.txt]"
 
 Examples:
-User: "Open Downloads"
+User: "Open my downloads folder"
 You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
 User: "Launch Chrome"
-You: "Launching Chrome. [CMD:LAUNCH_APP:Google Chrome]"
+You: "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
 
 User: "What's the weather?"
-You: "I cannot check weather, but I can open apps or folders for you."
+You: "Can't check weather."
 
-Keep ALL responses under 10 words unless asked for details.`
-        : `You are Atlas Voice, a helpful AI assistant. Keep responses concise and natural.`;
+MAX 3 words per response.`
+        : `You are Atlas Voice. Keep responses under 5 words.`;
 
       // Send session update with instructions
       dataChannel.send(JSON.stringify({
@@ -259,10 +256,9 @@ Keep ALL responses under 10 words unless asked for details.`
                   console.log('Executing desktop command:', command);
                   executeDesktopCommand(command).then(result => {
                     if (result.error) {
-                      addMessage('assistant', `❌ Error: ${result.error}`);
-                    } else {
-                      addMessage('assistant', `✅ ${result.message || 'Command executed'}`);
+                      addMessage('assistant', `❌ ${result.error}`);
                     }
+                    // Success - no message needed, AI already confirmed
                   });
                 }
               }
@@ -424,25 +420,22 @@ els.desktopMode.addEventListener('change', () => {
   // If already connected, update session instructions
   if (connected && dataChannel && dataChannel.readyState === 'open') {
     const instructions = isDesktopMode
-      ? `You are Atlas Voice with desktop automation. Keep responses SHORT and CONCISE.
+      ? `You are Atlas Voice. ULTRA CONCISE responses only.
 
-When executing commands, use brief confirmations:
-
-Opening folders: "Opening [folder name]. [CMD:OPEN_FOLDER:path]"
-Creating files: "Creating [filename]. [CMD:CREATE_FILE:path/file.txt]"
-Finding files: "Searching for [name]. [CMD:FIND_FILE:filename]"
-Launching apps: "Launching [app]. [CMD:LAUNCH_APP:AppName]"
-Listing files: "Listing files. [CMD:LIST_FILES:directory]"
+Commands - say just 2 words:
+"Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
+"Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+"Creating file. [CMD:CREATE_FILE:test.txt]"
 
 Examples:
-User: "Open Downloads"
+User: "Open my downloads folder"
 You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
 User: "Launch Chrome"
-You: "Launching Chrome. [CMD:LAUNCH_APP:Google Chrome]"
+You: "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
 
-Keep ALL responses under 10 words unless asked for details.`
-      : `You are Atlas Voice, a helpful AI assistant. Keep responses concise and natural.`;
+MAX 3 words per response.`
+      : `You are Atlas Voice. Keep responses under 5 words.`;
 
     dataChannel.send(JSON.stringify({
       type: 'session.update',
@@ -501,23 +494,23 @@ async function executeDesktopCommand(command) {
 
     switch (type) {
       case 'openFolder':
-        // Use Chrome downloads to trigger folder open
-        const folderPath = param.replace('~', '/Users/ekodevapps');
+      case 'listFiles':
+        // Open Downloads folder using Chrome API
         await chrome.downloads.showDefaultFolder();
-        return { success: true, message: `Opening Downloads folder` };
+        return { success: true, message: `Done` };
 
       case 'runApp':
-        // Open Google search which user can use to launch app
-        const searchQuery = `mac open ${param}`;
+        // Open file:// URL to trigger app launch
+        const appName = param.replace(/\s/g, '%20');
         await chrome.tabs.create({
-          url: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
+          url: `file:///Applications/${appName}.app`,
           active: true
         });
-        return { success: true, message: `Search opened for: ${param}` };
+        return { success: true, message: `Done` };
 
       case 'createFile':
         // Create a download
-        const blob = new Blob(['# Created by Atlas Voice\n'], { type: 'text/plain' });
+        const blob = new Blob([''], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const filename = param.split('/').pop();
         await chrome.downloads.download({
@@ -525,16 +518,10 @@ async function executeDesktopCommand(command) {
           filename: filename,
           saveAs: false
         });
-        return { success: true, message: `Created file: ${filename}` };
-
-      case 'listFiles':
-        return {
-          success: true,
-          message: `Opening ${param || 'Downloads'} folder to view files`
-        };
+        return { success: true, message: `Done` };
 
       default:
-        return { error: 'Unknown command type' };
+        return { error: 'Unknown command' };
     }
   } catch (err) {
     console.error('Desktop command error:', err);
