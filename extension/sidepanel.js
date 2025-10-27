@@ -156,6 +156,43 @@ async function connectRealtime() {
     pc.ontrack = (e) => { remoteAudioEl.srcObject = e.streams[0]; };
 
     dataChannel = pc.createDataChannel("oai-events");
+
+    dataChannel.onopen = () => {
+      console.log('Data channel opened');
+
+      // Configure session with desktop commander instructions if enabled
+      const instructions = isDesktopMode
+        ? `You are Atlas Voice, an AI assistant with desktop automation capabilities. You can help users control their computer through voice commands.
+
+Available desktop commands:
+- "open folder [path]" - Opens a folder or directory
+- "create file [path]" - Creates a new file
+- "find file [name]" - Searches for files by name
+- "launch [app]" - Opens an application
+- "list files in [directory]" - Shows contents of a directory
+
+When users ask you to perform these actions, acknowledge and confirm what you're doing. Be helpful and conversational while executing commands.`
+        : `You are Atlas Voice, a helpful AI assistant. Have natural conversations with users.`;
+
+      // Send session update with instructions
+      dataChannel.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          instructions: instructions,
+          voice: 'alloy',
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500
+          }
+        }
+      }));
+    };
+
     dataChannel.onmessage = async (e) => {
       try {
         const msg = JSON.parse(e.data);
@@ -343,6 +380,31 @@ els.desktopMode.addEventListener('change', () => {
   } else {
     els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
     els.voiceOrb.classList.remove('desktop-mode');
+  }
+
+  // If already connected, update session instructions
+  if (connected && dataChannel && dataChannel.readyState === 'open') {
+    const instructions = isDesktopMode
+      ? `You are Atlas Voice, an AI assistant with desktop automation capabilities. You can help users control their computer through voice commands.
+
+Available desktop commands:
+- "open folder [path]" - Opens a folder or directory
+- "create file [path]" - Creates a new file
+- "find file [name]" - Searches for files by name
+- "launch [app]" - Opens an application
+- "list files in [directory]" - Shows contents of a directory
+
+When users ask you to perform these actions, acknowledge and confirm what you're doing. Be helpful and conversational while executing commands.`
+      : `You are Atlas Voice, a helpful AI assistant. Have natural conversations with users.`;
+
+    dataChannel.send(JSON.stringify({
+      type: 'session.update',
+      session: {
+        instructions: instructions
+      }
+    }));
+
+    console.log('Updated session instructions:', isDesktopMode ? 'Desktop Commander enabled' : 'Standard mode');
   }
 });
 
