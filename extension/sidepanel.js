@@ -172,6 +172,7 @@ Commands - say just 2 words:
 "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
 "Creating file. [CMD:CREATE_FILE:test.txt]"
+"Opening website. [CMD:OPEN_URL:google.com]"
 
 Examples:
 User: "Open my downloads folder"
@@ -179,6 +180,12 @@ You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
 User: "Launch Chrome"
 You: "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+
+User: "Open Google"
+You: "Opening website. [CMD:OPEN_URL:google.com]"
+
+User: "Go to YouTube"
+You: "Opening website. [CMD:OPEN_URL:youtube.com]"
 
 User: "What's the weather?"
 You: "Can't check weather."
@@ -580,6 +587,7 @@ Commands - say just 2 words:
 "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
 "Creating file. [CMD:CREATE_FILE:test.txt]"
+"Opening website. [CMD:OPEN_URL:google.com]"
 
 Examples:
 User: "Open my downloads folder"
@@ -587,6 +595,12 @@ You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
 User: "Launch Chrome"
 You: "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+
+User: "Open Google"
+You: "Opening website. [CMD:OPEN_URL:google.com]"
+
+User: "Go to YouTube"
+You: "Opening website. [CMD:OPEN_URL:youtube.com]"
 
 MAX 3 words per response.`
       : `You are Atlas Voice. Keep responses under 5 words.`;
@@ -611,7 +625,8 @@ function mapCommandType(cmdType, param) {
     'CREATE_FILE': { type: 'createFile', param },
     'FIND_FILE': { type: 'findFile', param },
     'LAUNCH_APP': { type: 'runApp', param },
-    'LIST_FILES': { type: 'listFiles', param }
+    'LIST_FILES': { type: 'listFiles', param },
+    'OPEN_URL': { type: 'openUrl', param }
   };
 
   return commandMap[cmdType] || null;
@@ -690,6 +705,31 @@ async function executeDesktopCommand(command) {
           filename: filename,
           saveAs: false
         });
+        return { success: true, message: `Done` };
+
+      case 'openUrl':
+        // Open URL in current tab instead of creating new one
+        let urlToOpen = param;
+        
+        // Add protocol if missing
+        if (!urlToOpen.startsWith('http://') && !urlToOpen.startsWith('https://')) {
+          urlToOpen = 'https://' + urlToOpen;
+        }
+        
+        // Get current active tab and update it
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (currentTab) {
+          await chrome.tabs.update(currentTab.id, {
+            url: urlToOpen,
+            active: true
+          });
+        } else {
+          // Fallback: create new tab if no active tab found
+          await chrome.tabs.create({
+            url: urlToOpen,
+            active: true
+          });
+        }
         return { success: true, message: `Done` };
 
       default:
