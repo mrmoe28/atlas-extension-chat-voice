@@ -168,6 +168,13 @@ h1 {
   height: 18px;
 }
 
+.mode-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
 .setting-actions {
   display: flex;
   gap: 8px;
@@ -318,6 +325,16 @@ h1 {
 .voice-orb-large.speaking .ring-2 {
   opacity: 0.6;
   animation: speaking-ripple-large 0.6s ease-out infinite 0.2s;
+}
+
+/* Desktop Commander Mode */
+.voice-orb-large.desktop-mode .orb-inner {
+  background: linear-gradient(135deg, #10b981, #059669);
+  opacity: 0.6;
+}
+
+.voice-orb-large.desktop-mode .orb-ring {
+  border-color: #10b981;
 }
 
 @keyframes pulse-orb-large {

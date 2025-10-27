@@ -12,6 +12,7 @@ const els = {
   voiceStatus: document.getElementById('voiceStatus'),
   interruptBtn: document.getElementById('interruptBtn'),
   continuousMode: document.getElementById('continuousMode'),
+  desktopMode: document.getElementById('desktopMode'),
   chatContainer: document.getElementById('chatContainer'),
   voiceOrb: document.getElementById('voiceOrb'),
   voiceOrbWrapper: document.getElementById('voiceOrbWrapper'),
@@ -29,6 +30,7 @@ let pc, micStream, dataChannel, remoteAudioEl, connected = false;
 let isListening = false;
 let isSpeaking = false;
 let isContinuousMode = false;
+let isDesktopMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
 
@@ -154,7 +156,7 @@ async function connectRealtime() {
     pc.ontrack = (e) => { remoteAudioEl.srcObject = e.streams[0]; };
 
     dataChannel = pc.createDataChannel("oai-events");
-    dataChannel.onmessage = (e) => {
+    dataChannel.onmessage = async (e) => {
       try {
         const msg = JSON.parse(e.data);
         console.log('Server event:', msg);
@@ -163,6 +165,23 @@ async function connectRealtime() {
           if (msg.transcript && currentUserMessage !== msg.transcript) {
             currentUserMessage = msg.transcript;
             addMessage('user', msg.transcript);
+
+            // Check for desktop commands if in desktop mode
+            if (isDesktopMode) {
+              const desktopCmd = parseDesktopCommand(msg.transcript);
+              if (desktopCmd) {
+                console.log('Desktop command detected:', desktopCmd);
+                showTypingIndicator();
+                const result = await executeDesktopCommand(desktopCmd);
+                removeTypingIndicator();
+
+                if (result.error) {
+                  addMessage('assistant', `❌ Error: ${result.error}`);
+                } else {
+                  addMessage('assistant', `✅ ${result.message || 'Command executed successfully'}`);
+                }
+              }
+            }
           }
         }
 
@@ -309,6 +328,67 @@ els.continuousMode.addEventListener('change', () => {
 
   els.voiceStatus.textContent = isContinuousMode ? 'Click to talk' : 'Hold to talk';
 });
+
+// Desktop mode toggle
+els.desktopMode.addEventListener('change', () => {
+  isDesktopMode = els.desktopMode.checked;
+
+  if (isDesktopMode) {
+    els.orbStatus.textContent = 'Desktop Commander mode enabled';
+    // Update orb color to indicate desktop mode
+    els.voiceOrb.classList.add('desktop-mode');
+  } else {
+    els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
+    els.voiceOrb.classList.remove('desktop-mode');
+  }
+});
+
+// Desktop command parser
+function parseDesktopCommand(text) {
+  const lowerText = text.toLowerCase().trim();
+
+  // Check for desktop command keywords
+  const commandPatterns = {
+    openFolder: /^(?:open|show|display)\s+(?:folder|directory)\s+(.+)$/i,
+    createFile: /^(?:create|make|new)\s+(?:file|document)\s+(.+)$/i,
+    findFile: /^(?:find|search|locate)\s+(?:file|document)\s+(.+)$/i,
+    runApp: /^(?:open|launch|run|start)\s+(.+)$/i,
+    listFiles: /^(?:list|show|display)\s+(?:files|contents)\s+(?:in|of)?\s*(.*)$/i,
+  };
+
+  for (const [command, pattern] of Object.entries(commandPatterns)) {
+    const match = text.match(pattern);
+    if (match) {
+      return {
+        type: command,
+        param: match[1]?.trim()
+      };
+    }
+  }
+
+  return null;
+}
+
+// Execute desktop command via server
+async function executeDesktopCommand(command) {
+  try {
+    const response = await fetch(`${els.serverUrl.value.trim()}/api/desktop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(command)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Command failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (err) {
+    console.error('Desktop command error:', err);
+    return { error: err.message };
+  }
+}
 
 // Connection button
 els.connectBtn.addEventListener('click', async () => {
