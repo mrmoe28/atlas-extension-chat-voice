@@ -25,7 +25,9 @@ const els = {
   ttsSay: document.getElementById('ttsSay'),
   permissionModal: document.getElementById('permissionModal'),
   requestPermissionBtn: document.getElementById('requestPermissionBtn'),
-  skipPermissionBtn: document.getElementById('skipPermissionBtn')
+  skipPermissionBtn: document.getElementById('skipPermissionBtn'),
+  toggleHelpBtn: document.getElementById('toggleHelpBtn'),
+  helpContent: document.getElementById('helpContent')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -617,6 +619,12 @@ function teardown() {
   els.voiceBtn.classList.remove('active');
   els.connectBtn.textContent = 'Connect';
   els.connectBtn.classList.remove('connected');
+  
+  // Reset UI to show voice orb
+  els.voiceOrbWrapper.classList.remove('hidden');
+  els.chatContainer.style.display = 'none';
+  els.chatContainer.innerHTML = '';
+  
   updateOrbState();
 }
 
@@ -1481,6 +1489,19 @@ els.skipPermissionBtn.addEventListener('click', () => {
   els.orbStatus.textContent = 'Click Connect in menu to start (microphone permission needed)';
 });
 
+// Help toggle functionality
+els.toggleHelpBtn.addEventListener('click', () => {
+  const isVisible = els.helpContent.style.display !== 'none';
+  
+  if (isVisible) {
+    els.helpContent.style.display = 'none';
+    els.toggleHelpBtn.textContent = 'Show Commands';
+  } else {
+    els.helpContent.style.display = 'block';
+    els.toggleHelpBtn.textContent = 'Hide Commands';
+  }
+});
+
 // Load saved settings from localStorage
 function loadSettings() {
   console.log('💾 Loading saved settings...');
@@ -1537,6 +1558,12 @@ function saveSettings() {
 
 // Initialize
 loadSettings();
+
+// Reset UI to show voice orb on startup
+els.voiceOrbWrapper.classList.remove('hidden');
+els.chatContainer.style.display = 'none';
+els.chatContainer.innerHTML = '';
+
 setupPressToTalk();
 setupContinuousMode();
 webSpeechFallbackSetup();
