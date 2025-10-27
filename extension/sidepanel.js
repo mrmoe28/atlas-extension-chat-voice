@@ -1,15 +1,15 @@
 /**
  * Side panel client: WebRTC to OpenAI Realtime with fallback to Web Speech.
- * Notes:
- * - In GA, OpenAI commonly uses /v1/realtime/calls for WebRTC SDP exchange.
- * - Get an ephemeral key from your server first; never ship your real API key.
+ * Supports both press-to-talk and continuous conversation modes.
  */
 const els = {
   serverUrl: document.getElementById('serverUrl'),
   connectBtn: document.getElementById('connectBtn'),
   status: document.getElementById('status'),
   pttBtn: document.getElementById('pttBtn'),
+  toggleBtn: document.getElementById('toggleBtn'),
   interruptBtn: document.getElementById('interruptBtn'),
+  continuousMode: document.getElementById('continuousMode'),
   youText: document.getElementById('youText'),
   aiText: document.getElementById('aiText'),
   voiceSelect: document.getElementById('voiceSelect'),
@@ -19,6 +19,7 @@ const els = {
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
+let isListening = false;
 
 async function getEphemeralToken(serverBase) {
   const r = await fetch(`${serverBase}/api/ephemeral`);
@@ -29,6 +30,8 @@ async function getEphemeralToken(serverBase) {
 async function ensureMic() {
   if (micStream) return micStream;
   micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  // Start with mic muted
+  for (const t of micStream.getAudioTracks()) t.enabled = false;
   return micStream;
 }
 
@@ -57,8 +60,21 @@ async function connectRealtime() {
     // DataChannel for control (interrupts, messages)
     dataChannel = pc.createDataChannel("oai-events");
     dataChannel.onmessage = (e) => {
-      // Helpful for debugging textual events if enabled from server
-      // console.log('DC message', e.data);
+      // Handle server events if needed
+      try {
+        const msg = JSON.parse(e.data);
+        console.log('Server message:', msg);
+
+        // Update transcripts if available
+        if (msg.type === 'conversation.item.input_audio_transcription.completed') {
+          els.youText.textContent = msg.transcript || '';
+        }
+        if (msg.type === 'response.text.delta' || msg.type === 'response.text.done') {
+          els.aiText.textContent += msg.delta || msg.text || '';
+        }
+      } catch (err) {
+        console.log('DC message:', e.data);
+      }
     };
 
     const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
@@ -73,12 +89,19 @@ async function connectRealtime() {
       },
       body: offer.sdp
     });
+
+    if (!sdpResponse.ok) {
+      throw new Error(`SDP exchange failed: ${sdpResponse.status}`);
+    }
+
     const answerSdp = await sdpResponse.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
     connected = true;
     els.status.textContent = `connected (${model})`;
     els.interruptBtn.disabled = false;
+    els.pttBtn.disabled = false;
+    els.toggleBtn.disabled = false;
   } catch (err) {
     console.error(err);
     els.status.textContent = `error: ${err.message}`;
@@ -89,29 +112,93 @@ async function connectRealtime() {
 function teardown() {
   if (dataChannel) dataChannel.close();
   if (pc) pc.close();
-  dataChannel = undefined; pc = undefined; connected = false;
+  if (micStream) {
+    for (const t of micStream.getTracks()) {
+      t.enabled = false;
+      t.stop();
+    }
+    micStream = null;
+  }
+  dataChannel = undefined;
+  pc = undefined;
+  connected = false;
+  isListening = false;
   els.status.textContent = 'disconnected';
   els.interruptBtn.disabled = true;
+  els.pttBtn.disabled = true;
+  els.toggleBtn.disabled = true;
+  els.pttBtn.classList.remove('active');
+  els.toggleBtn.classList.remove('active');
 }
 
+function enableMic() {
+  if (!connected || !micStream) return;
+  for (const t of micStream.getAudioTracks()) t.enabled = true;
+  isListening = true;
+}
+
+function disableMic() {
+  if (!micStream) return;
+  for (const t of micStream.getAudioTracks()) t.enabled = false;
+  isListening = false;
+}
+
+// Press-to-Talk Mode
 function pressToTalkSetup() {
-  let mediaSender;
-  els.pttBtn.addEventListener('mousedown', async () => {
-    els.pttBtn.classList.add('active');
+  els.pttBtn.addEventListener('mousedown', () => {
     if (!connected) return;
-    // Unmute local mic track(s)
-    for (const t of micStream.getAudioTracks()) t.enabled = true;
+    els.pttBtn.classList.add('active');
+    enableMic();
   });
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(evt => {
+
+  ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => {
     els.pttBtn.addEventListener(evt, () => {
-      els.pttBtn.classList.remove('active');
       if (!connected) return;
-      // Optional: you can send a turn-ending hint over DataChannel if your server enables it.
-      // dataChannel?.send(JSON.stringify({ type: 'input_audio.end' }));
-      for (const t of micStream.getAudioTracks()) t.enabled = false;
+      els.pttBtn.classList.remove('active');
+      disableMic();
     });
   });
 }
+
+// Continuous Mode (Toggle)
+function continuousModeSetup() {
+  els.toggleBtn.addEventListener('click', () => {
+    if (!connected) return;
+
+    if (isListening) {
+      // Stop listening
+      els.toggleBtn.classList.remove('active');
+      els.toggleBtn.textContent = 'Click to talk';
+      disableMic();
+    } else {
+      // Start listening
+      els.toggleBtn.classList.add('active');
+      els.toggleBtn.innerHTML = '<img src="assets/mic.svg" alt="" /> Listening...';
+      enableMic();
+    }
+  });
+}
+
+// Mode switching
+els.continuousMode.addEventListener('change', () => {
+  if (els.continuousMode.checked) {
+    // Switch to continuous mode
+    els.pttBtn.style.display = 'none';
+    els.toggleBtn.style.display = 'inline-block';
+    if (isListening) {
+      disableMic();
+      els.pttBtn.classList.remove('active');
+    }
+  } else {
+    // Switch to press-to-talk mode
+    els.pttBtn.style.display = 'inline-block';
+    els.toggleBtn.style.display = 'none';
+    if (isListening) {
+      disableMic();
+      els.toggleBtn.classList.remove('active');
+    }
+  }
+});
 
 function webSpeechFallbackSetup() {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -131,16 +218,20 @@ function webSpeechFallbackSetup() {
 
   els.recStart.addEventListener('click', async () => {
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true }); // nudge permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
       rec?.start();
-    } catch {}
+    } catch (err) {
+      console.error('Mic permission denied:', err);
+    }
   });
   els.recStop.addEventListener('click', () => rec?.stop());
 
   // TTS
   function populateVoices() {
     const voices = speechSynthesis.getVoices();
-    els.voiceSelect.innerHTML = voices.map(v => `<option value="${v.name}">${v.name} (${v.lang})</option>`).join('');
+    els.voiceSelect.innerHTML = voices.map(v =>
+      `<option value="${v.name}">${v.name} (${v.lang})</option>`
+    ).join('');
   }
   populateVoices();
   speechSynthesis.onvoiceschanged = populateVoices;
@@ -155,16 +246,36 @@ function webSpeechFallbackSetup() {
 }
 
 els.connectBtn.addEventListener('click', async () => {
-  if (!connected) await connectRealtime(); else teardown();
+  if (!connected) {
+    await connectRealtime();
+  } else {
+    teardown();
+    els.connectBtn.textContent = 'Connect';
+  }
+
+  if (connected) {
+    els.connectBtn.textContent = 'Disconnect';
+  }
 });
+
+// Interrupt button sends a cancel event
+els.interruptBtn.addEventListener('click', () => {
+  try {
+    dataChannel?.send(JSON.stringify({ type: 'response.cancel' }));
+    disableMic();
+    els.pttBtn.classList.remove('active');
+    els.toggleBtn.classList.remove('active');
+    isListening = false;
+  } catch (err) {
+    console.error('Interrupt failed:', err);
+  }
+});
+
+// Initialize
 pressToTalkSetup();
+continuousModeSetup();
 webSpeechFallbackSetup();
 
-// Example hooks to display text (if you additionally stream transcripts over DC):
-// function setUserText(t) { els.youText.textContent = t; }
-// function setAiText(t) { els.aiText.textContent = t; }
-
-// Interrupt button sends a cancel event (if your server relays it)
-els.interruptBtn.addEventListener('click', () => {
-  try { dataChannel?.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
-});
+// Disable buttons initially
+els.pttBtn.disabled = true;
+els.toggleBtn.disabled = true;
