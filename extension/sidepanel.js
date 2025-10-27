@@ -255,7 +255,7 @@ MAX 3 words per response.`
       ] : [];
 
       // Send session update with instructions and tools
-      dataChannel.send(JSON.stringify({
+      const sessionUpdate = {
         type: 'session.update',
         session: {
           instructions: isDesktopMode
@@ -282,13 +282,20 @@ IMPORTANT:
             silence_duration_ms: 500
           }
         }
-      }));
+      };
+
+      console.log('🚀 Sending session update. Tools:', tools.length);
+      dataChannel.send(JSON.stringify(sessionUpdate));
     };
 
     dataChannel.onmessage = async (e) => {
       try {
         const msg = JSON.parse(e.data);
-        console.log('Server event:', msg);
+
+        // Log all events for debugging
+        if (msg.type !== 'response.audio.delta') {
+          console.log('📨 Event:', msg.type, msg);
+        }
 
         // Handle user transcript
         if (msg.type === 'conversation.item.input_audio_transcription.completed') {
@@ -298,55 +305,62 @@ IMPORTANT:
           }
         }
 
-        // Handle function calls from OpenAI
-        if (msg.type === 'response.function_call_arguments.done') {
-          const functionName = msg.name;
-          const args = JSON.parse(msg.arguments);
-          const callId = msg.call_id;
+        // Handle function calls from OpenAI - check for item.type in response.output_item.done
+        if (msg.type === 'response.output_item.done' && msg.item?.type === 'function_call') {
+          const functionName = msg.item.name;
+          const args = JSON.parse(msg.item.arguments);
+          const callId = msg.item.call_id;
 
-          console.log('Function call:', functionName, args);
+          console.log('🔧 Function call:', functionName, args);
 
           // Execute the function
           let result = { success: false, error: 'Unknown function' };
 
-          if (functionName === 'open_webpage') {
-            let url = args.url;
-            // If no protocol, check if it's a search query or URL
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-              // Check if it looks like a domain
-              if (url.includes('.com') || url.includes('.org') || url.includes('.net') || url.includes('.io')) {
-                url = 'https://' + url;
-              } else {
-                // Treat as search query
-                url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+          try {
+            if (functionName === 'open_webpage') {
+              let url = args.url;
+              // If no protocol, check if it's a search query or URL
+              if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                // Check if it looks like a domain
+                if (url.includes('.com') || url.includes('.org') || url.includes('.net') || url.includes('.io')) {
+                  url = 'https://' + url;
+                } else {
+                  // Treat as search query
+                  url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+                }
               }
+              await chrome.tabs.create({ url: url, active: true });
+              result = { success: true, message: `Opened ${url}` };
+              addMessage('assistant', '✅ Opened page');
+            } else if (functionName === 'open_folder') {
+              await chrome.downloads.showDefaultFolder();
+              result = { success: true, message: 'Opened Downloads folder' };
+              addMessage('assistant', '✅ Opened Downloads folder');
+            } else if (functionName === 'launch_app') {
+              const appName = args.app_name.replace(/\s/g, '%20');
+              await chrome.tabs.create({
+                url: `file:///Applications/${appName}.app`,
+                active: true
+              });
+              result = { success: true, message: `Launched ${args.app_name}` };
+              addMessage('assistant', `✅ Launched ${args.app_name}`);
+            } else if (functionName === 'create_file') {
+              const blob = new Blob([''], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              await chrome.downloads.download({
+                url: url,
+                filename: args.filename,
+                saveAs: false
+              });
+              result = { success: true, message: `Created ${args.filename}` };
+              addMessage('assistant', `✅ Created ${args.filename}`);
             }
-            await chrome.tabs.create({ url: url, active: true });
-            result = { success: true, message: `Opened ${url}` };
-            addMessage('assistant', '✅ Opening page');
-          } else if (functionName === 'open_folder') {
-            await chrome.downloads.showDefaultFolder();
-            result = { success: true, message: 'Opened Downloads folder' };
-            addMessage('assistant', '✅ Opening Downloads');
-          } else if (functionName === 'launch_app') {
-            const appName = args.app_name.replace(/\s/g, '%20');
-            await chrome.tabs.create({
-              url: `file:///Applications/${appName}.app`,
-              active: true
-            });
-            result = { success: true, message: `Launched ${args.app_name}` };
-            addMessage('assistant', `✅ Launching ${args.app_name}`);
-          } else if (functionName === 'create_file') {
-            const blob = new Blob([''], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            await chrome.downloads.download({
-              url: url,
-              filename: args.filename,
-              saveAs: false
-            });
-            result = { success: true, message: `Created ${args.filename}` };
-            addMessage('assistant', `✅ Creating ${args.filename}`);
+          } catch (error) {
+            result = { success: false, error: error.message };
+            addMessage('assistant', `❌ Error: ${error.message}`);
           }
+
+          console.log('📤 Sending function result:', result);
 
           // Send function result back to OpenAI
           dataChannel.send(JSON.stringify({
@@ -357,6 +371,9 @@ IMPORTANT:
               output: JSON.stringify(result)
             }
           }));
+
+          // Trigger AI response
+          dataChannel.send(JSON.stringify({ type: 'response.create' }));
         }
 
         // Handle AI text responses
