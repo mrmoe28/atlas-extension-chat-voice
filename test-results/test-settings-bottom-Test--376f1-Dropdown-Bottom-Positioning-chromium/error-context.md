@@ -1,0 +1,80 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - button [active] [ref=e4] [cursor=pointer]:
+      - img [ref=e5]
+    - heading "Atlas Voice" [level=1] [ref=e6]
+  - generic [ref=e10]:
+    - generic [ref=e11]:
+      - generic [ref=e12]: Server URL
+      - textbox "Server URL" [ref=e13]: https://atlas-extension-chat-voice.vercel.app
+    - generic [ref=e15] [cursor=pointer]:
+      - checkbox "Continuous mode" [ref=e16]
+      - generic [ref=e17]: Continuous mode
+    - generic [ref=e18]:
+      - generic [ref=e19] [cursor=pointer]:
+        - checkbox "Desktop Commander mode" [ref=e20]
+        - generic [ref=e21]: Desktop Commander mode
+      - paragraph [ref=e22]: Enable voice-controlled desktop automation
+    - generic [ref=e23]:
+      - generic [ref=e24]:
+        - generic [ref=e25]: Atlas Creativity
+        - generic [ref=e26]: "0.7"
+      - generic [ref=e27]:
+        - slider "Atlas Creativity 0.7" [ref=e28] [cursor=pointer]: "0.7"
+        - generic [ref=e29]:
+          - generic [ref=e30]: Conservative
+          - generic [ref=e31]: Creative
+      - paragraph [ref=e32]: Higher values = more creative responses, lower values = more focused responses
+    - generic [ref=e33]:
+      - generic [ref=e34] [cursor=pointer]:
+        - checkbox "Memory & Learning" [ref=e35]
+        - generic [ref=e36]: Memory & Learning
+      - paragraph [ref=e37]: Atlas remembers conversations and learns from your patterns
+    - generic [ref=e38]:
+      - generic [ref=e39]: Special Instructions
+      - textbox "Special Instructions" [ref=e40]:
+        - /placeholder: Add custom instructions for Atlas (e.g., 'Always be concise', 'Use technical terms', 'Be friendly and casual')
+      - paragraph [ref=e41]: Customize how Atlas responds to you
+    - generic [ref=e42]:
+      - generic [ref=e43]: Knowledge Base
+      - generic [ref=e44]:
+        - button "View Knowledge" [ref=e45] [cursor=pointer]
+        - button "Clear Memory" [ref=e46] [cursor=pointer]
+      - paragraph [ref=e47]: Manage Atlas's memory and learned patterns
+    - generic [ref=e48]:
+      - button "Connect" [ref=e49] [cursor=pointer]
+      - button "Stop" [disabled] [ref=e50]
+    - generic [ref=e51]:
+      - generic [ref=e52] [cursor=pointer]:
+        - checkbox "Screen Vision mode (Advanced)" [ref=e53]
+        - generic [ref=e54]: Screen Vision mode (Advanced)
+      - paragraph [ref=e55]: AI can see your screen when you ask
+    - generic [ref=e57]:
+      - heading "🎤 Voice Commands" [level=3] [ref=e58]
+      - button "Show Commands" [ref=e59] [cursor=pointer]
+    - paragraph [ref=e67]: Click Connect in menu to start
+    - contentinfo [ref=e68]:
+      - button [disabled] [ref=e69]:
+        - img [ref=e71]
+      - generic [ref=e74]: Hold to talk
+    - generic [ref=e76]:
+      - heading "Welcome to Atlas Voice!" [level=2] [ref=e77]
+      - paragraph [ref=e78]: To use voice features, Atlas Voice needs microphone access.
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e81]: "1"
+          - generic [ref=e82]: Click "Allow Microphone" below
+        - generic [ref=e83]:
+          - generic [ref=e84]: "2"
+          - generic [ref=e85]: Click "Allow" when your browser prompts for permission
+        - generic [ref=e86]:
+          - generic [ref=e87]: "3"
+          - generic [ref=e88]: Connect to server and start chatting!
+      - generic [ref=e89]:
+        - button "Allow Microphone" [ref=e90] [cursor=pointer]
+        - button "Maybe Later" [ref=e91] [cursor=pointer]
+      - paragraph [ref=e92]: You can change permissions anytime in your browser settings
+```

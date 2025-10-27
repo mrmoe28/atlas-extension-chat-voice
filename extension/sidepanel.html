@@ -49,6 +49,53 @@
           <p class="mode-description">Enable voice-controlled desktop automation</p>
         </div>
 
+        <div class="setting-item">
+          <label for="temperatureSlider" class="slider-label">
+            <span>Atlas Creativity</span>
+            <span class="slider-value" id="temperatureValue">0.7</span>
+          </label>
+          <div class="slider-container">
+            <input type="range" 
+                   id="temperatureSlider" 
+                   min="0.1" 
+                   max="2.0" 
+                   step="0.1" 
+                   value="0.7" 
+                   class="temperature-slider" />
+            <div class="slider-labels">
+              <span class="slider-label-left">Conservative</span>
+              <span class="slider-label-right">Creative</span>
+            </div>
+          </div>
+          <p class="mode-description">Higher values = more creative responses, lower values = more focused responses</p>
+        </div>
+
+        <div class="setting-item">
+          <label class="mode-toggle">
+            <input type="checkbox" id="memoryEnabled" />
+            <span>Memory & Learning</span>
+          </label>
+          <p class="mode-description">Atlas remembers conversations and learns from your patterns</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="specialInstructions" class="text-label">Special Instructions</label>
+          <textarea id="specialInstructions" 
+                    class="special-instructions-textarea" 
+                    placeholder="Add custom instructions for Atlas (e.g., 'Always be concise', 'Use technical terms', 'Be friendly and casual')"
+                    rows="2"></textarea>
+          <p class="mode-description">Customize how Atlas responds to you</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="knowledgeBase" class="text-label">Knowledge Base</label>
+          <div class="knowledge-base-controls">
+            <button id="viewKnowledgeBtn" class="knowledge-btn">View Knowledge</button>
+            <button id="clearMemoryBtn" class="knowledge-btn secondary">Clear Memory</button>
+          </div>
+          <p class="mode-description">Manage Atlas's memory and learned patterns</p>
+        </div>
+
         <div class="setting-actions">
           <button id="connectBtn" class="connect-btn">Connect</button>
           <button id="interruptBtn" class="interrupt-btn" disabled>Stop</button>
@@ -65,8 +112,226 @@
         <div class="setting-item advanced-options" id="captureScreenContainer" style="display:none;">
           <button id="captureScreenBtn" class="capture-btn">📸 Capture Screen</button>
         </div>
-      </div>
-    </div>
+
+        <!-- Help Section -->
+        <div class="help-section">
+          <div class="help-header">
+            <h3>🎤 Voice Commands</h3>
+            <button id="toggleHelpBtn" class="toggle-help-btn">Show Commands</button>
+          </div>
+          <div class="help-content" id="helpContent" style="display:none;">
+            <div class="command-category">
+              <h4>📁 File & Folder Management</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"Open my downloads folder"</span>
+                  <span class="command-desc">Opens Downloads folder</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Create a folder called TestFolder"</span>
+                  <span class="command-desc">Creates new folder</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Delete the old file"</span>
+                  <span class="command-desc">Deletes specified file</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Rename my document to final version"</span>
+                  <span class="command-desc">Renames file/folder</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Copy this file to desktop"</span>
+                  <span class="command-desc">Copies file to destination</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Move this to trash"</span>
+                  <span class="command-desc">Moves file to destination</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="command-category">
+              <h4>🌐 Browser Control</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"Open Google"</span>
+                  <span class="command-desc">Navigates to website</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Refresh the page"</span>
+                  <span class="command-desc">Reloads current page</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Go back"</span>
+                  <span class="command-desc">Browser back button</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Go forward"</span>
+                  <span class="command-desc">Browser forward button</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Open new tab"</span>
+                  <span class="command-desc">Opens new browser tab</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Close tab"</span>
+                  <span class="command-desc">Closes current tab</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Take screenshot"</span>
+                  <span class="command-desc">Captures page screenshot</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="command-category">
+              <h4>🖱️ Mouse & Click Control</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"Click the search button"</span>
+                  <span class="command-desc">Clicks element by text</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Double click the file"</span>
+                  <span class="command-desc">Double-clicks element</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Right click here"</span>
+                  <span class="command-desc">Right-clicks element</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Hover over button"</span>
+                  <span class="command-desc">Hovers over element</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Drag this to there"</span>
+                  <span class="command-desc">Drags element to target</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="command-category">
+              <h4>⌨️ Keyboard & Text</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"Type hello world"</span>
+                  <span class="command-desc">Types text into field</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Clear the field"</span>
+                  <span class="command-desc">Clears input field</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Select all"</span>
+                  <span class="command-desc">Selects all text</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Copy this text"</span>
+                  <span class="command-desc">Copies text to clipboard</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Paste hello"</span>
+                  <span class="command-desc">Pastes text from clipboard</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Press Enter"</span>
+                  <span class="command-desc">Presses specific key</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Press Ctrl+C"</span>
+                  <span class="command-desc">Presses key combination</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="command-category">
+              <h4>📜 Page Navigation</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"Scroll down"</span>
+                  <span class="command-desc">Scrolls page down</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Scroll up"</span>
+                  <span class="command-desc">Scrolls page up</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Scroll to top"</span>
+                  <span class="command-desc">Goes to page top</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Scroll to bottom"</span>
+                  <span class="command-desc">Goes to page bottom</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="command-category">
+              <h4>🔊 System Control</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"Turn up the volume"</span>
+                  <span class="command-desc">Increases system volume</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Turn down the volume"</span>
+                  <span class="command-desc">Decreases system volume</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Mute the volume"</span>
+                  <span class="command-desc">Mutes system audio</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Make it brighter"</span>
+                  <span class="command-desc">Increases screen brightness</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Make it dimmer"</span>
+                  <span class="command-desc">Decreases screen brightness</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Lock my computer"</span>
+                  <span class="command-desc">Locks the screen</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Sleep my computer"</span>
+                  <span class="command-desc">Puts computer to sleep</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="command-category">
+              <h4>🔍 Information & Search</h4>
+              <div class="command-list">
+                <div class="command-item">
+                  <span class="command-example">"What time is it"</span>
+                  <span class="command-desc">Gets current time</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"What's today's date"</span>
+                  <span class="command-desc">Gets current date</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Search for AI"</span>
+                  <span class="command-desc">Searches Google</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Search YouTube for music"</span>
+                  <span class="command-desc">Searches YouTube</span>
+                </div>
+                <div class="command-item">
+                  <span class="command-example">"Search Wikipedia for history"</span>
+                  <span class="command-desc">Searches Wikipedia</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="help-footer">
+              <p><strong>💡 Tip:</strong> Atlas Voice understands natural language. Just speak naturally and it will understand your intent!</p>
+              <p><strong>🎯 Note:</strong> Desktop Commander mode must be enabled for system control commands.</p>
+            </div>
+          </div>
+        </div>
 
     <!-- Main Content Container (Always visible, settings slides over it) -->
     <div class="content-area">

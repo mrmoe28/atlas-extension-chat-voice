@@ -25,7 +25,15 @@ const els = {
   ttsSay: document.getElementById('ttsSay'),
   permissionModal: document.getElementById('permissionModal'),
   requestPermissionBtn: document.getElementById('requestPermissionBtn'),
-  skipPermissionBtn: document.getElementById('skipPermissionBtn')
+  skipPermissionBtn: document.getElementById('skipPermissionBtn'),
+  toggleHelpBtn: document.getElementById('toggleHelpBtn'),
+  helpContent: document.getElementById('helpContent'),
+  temperatureSlider: document.getElementById('temperatureSlider'),
+  temperatureValue: document.getElementById('temperatureValue'),
+  memoryEnabled: document.getElementById('memoryEnabled'),
+  specialInstructions: document.getElementById('specialInstructions'),
+  viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
+  clearMemoryBtn: document.getElementById('clearMemoryBtn')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -172,13 +180,136 @@ Commands - say just 2 words:
 "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
 "Creating file. [CMD:CREATE_FILE:test.txt]"
+"Creating folder. [CMD:CREATE_FOLDER:~/Downloads/NewFolder]"
+"Deleting file. [CMD:DELETE_FILE:~/Downloads/old.txt]"
+"Renaming file. [CMD:RENAME_FILE:old.txt:new.txt]"
+"Copying file. [CMD:COPY_FILE:source.txt:dest.txt]"
+"Moving file. [CMD:MOVE_FILE:source.txt:dest.txt]"
+"Opening website. [CMD:OPEN_URL:google.com]"
+"Refreshing page. [CMD:REFRESH_PAGE:]"
+"Going back. [CMD:GO_BACK:]"
+"Going forward. [CMD:GO_FORWARD:]"
+"Opening tab. [CMD:NEW_TAB:]"
+"Closing tab. [CMD:CLOSE_TAB:]"
+"Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
+"Clicking button. [CMD:CLICK_ELEMENT:Search]"
+"Double clicking. [CMD:DOUBLE_CLICK:file]"
+"Right clicking. [CMD:RIGHT_CLICK:menu]"
+"Typing text. [CMD:TYPE_TEXT:hello world]"
+"Clearing field. [CMD:CLEAR_FIELD:input]"
+"Selecting all. [CMD:SELECT_ALL:]"
+"Copying text. [CMD:COPY_TEXT:]"
+"Pasting text. [CMD:PASTE_TEXT:hello]"
+"Scrolling down. [CMD:SCROLL_PAGE:down]"
+"Scrolling up. [CMD:SCROLL_PAGE:up]"
+"Scrolling to top. [CMD:SCROLL_TO_TOP:]"
+"Scrolling to bottom. [CMD:SCROLL_TO_BOTTOM:]"
+"Dragging element. [CMD:DRAG_DROP:source:target]"
+"Pressing key. [CMD:KEY_PRESS:Enter]"
+"Pressing combination. [CMD:KEY_COMBINATION:Ctrl+C]"
+"Volume up. [CMD:VOLUME_UP:]"
+"Volume down. [CMD:VOLUME_DOWN:]"
+"Muting volume. [CMD:MUTE_VOLUME:]"
+"Brightness up. [CMD:BRIGHTNESS_UP:]"
+"Brightness down. [CMD:BRIGHTNESS_DOWN:]"
+"Locking screen. [CMD:LOCK_SCREEN:]"
+"Sleeping computer. [CMD:SLEEP_COMPUTER:]"
+"Getting time. [CMD:GET_TIME:]"
+"Getting date. [CMD:GET_DATE:]"
+"Searching web. [CMD:SEARCH_WEB:artificial intelligence]"
+"Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
+"Searching Wikipedia. [CMD:SEARCH_WIKIPEDIA:history]"
 
 Examples:
 User: "Open my downloads folder"
 You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
-User: "Launch Chrome"
-You: "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+User: "Create a folder called TestFolder"
+You: "Creating folder. [CMD:CREATE_FOLDER:~/Downloads/TestFolder]"
+
+User: "Delete the old file"
+You: "Deleting file. [CMD:DELETE_FILE:~/Downloads/old.txt]"
+
+User: "Rename my document to final version"
+You: "Renaming file. [CMD:RENAME_FILE:~/Documents/draft.txt:final-version.txt]"
+
+User: "Copy this file to desktop"
+You: "Copying file. [CMD:COPY_FILE:~/Downloads/file.txt:~/Desktop/file.txt]"
+
+User: "Move this to trash"
+You: "Moving file. [CMD:MOVE_FILE:~/Downloads/temp.txt:~/Trash/temp.txt]"
+
+User: "Open Google"
+You: "Opening website. [CMD:OPEN_URL:google.com]"
+
+User: "Refresh the page"
+You: "Refreshing page. [CMD:REFRESH_PAGE:]"
+
+User: "Go back"
+You: "Going back. [CMD:GO_BACK:]"
+
+User: "Open new tab"
+You: "Opening tab. [CMD:NEW_TAB:]"
+
+User: "Take screenshot"
+You: "Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
+
+User: "Click the search button"
+You: "Clicking button. [CMD:CLICK_ELEMENT:Search]"
+
+User: "Double click the file"
+You: "Double clicking. [CMD:DOUBLE_CLICK:file]"
+
+User: "Right click here"
+You: "Right clicking. [CMD:RIGHT_CLICK:menu]"
+
+User: "Type hello world"
+You: "Typing text. [CMD:TYPE_TEXT:hello world]"
+
+User: "Clear the field"
+You: "Clearing field. [CMD:CLEAR_FIELD:input]"
+
+User: "Select all"
+You: "Selecting all. [CMD:SELECT_ALL:]"
+
+User: "Copy this text"
+You: "Copying text. [CMD:COPY_TEXT:]"
+
+User: "Paste hello"
+You: "Pasting text. [CMD:PASTE_TEXT:hello]"
+
+User: "Scroll down"
+You: "Scrolling down. [CMD:SCROLL_PAGE:down]"
+
+User: "Scroll to top"
+You: "Scrolling to top. [CMD:SCROLL_TO_TOP:]"
+
+User: "Drag this to there"
+You: "Dragging element. [CMD:DRAG_DROP:source:target]"
+
+User: "Press Enter"
+You: "Pressing key. [CMD:KEY_PRESS:Enter]"
+
+User: "Press Ctrl+C"
+You: "Pressing combination. [CMD:KEY_COMBINATION:Ctrl+C]"
+
+User: "Turn up the volume"
+You: "Volume up. [CMD:VOLUME_UP:]"
+
+User: "Make it brighter"
+You: "Brightness up. [CMD:BRIGHTNESS_UP:]"
+
+User: "Lock my computer"
+You: "Locking screen. [CMD:LOCK_SCREEN:]"
+
+User: "What time is it"
+You: "Getting time. [CMD:GET_TIME:]"
+
+User: "Search for AI"
+You: "Searching web. [CMD:SEARCH_WEB:artificial intelligence]"
+
+User: "Search YouTube for music"
+You: "Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
 
 User: "What's the weather?"
 You: "Can't check weather."
@@ -494,6 +625,12 @@ function teardown() {
   els.voiceBtn.classList.remove('active');
   els.connectBtn.textContent = 'Connect';
   els.connectBtn.classList.remove('connected');
+  
+  // Reset UI to show voice orb
+  els.voiceOrbWrapper.classList.remove('hidden');
+  els.chatContainer.style.display = 'none';
+  els.chatContainer.innerHTML = '';
+  
   updateOrbState();
 }
 
@@ -580,13 +717,136 @@ Commands - say just 2 words:
 "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
 "Creating file. [CMD:CREATE_FILE:test.txt]"
+"Creating folder. [CMD:CREATE_FOLDER:~/Downloads/NewFolder]"
+"Deleting file. [CMD:DELETE_FILE:~/Downloads/old.txt]"
+"Renaming file. [CMD:RENAME_FILE:old.txt:new.txt]"
+"Copying file. [CMD:COPY_FILE:source.txt:dest.txt]"
+"Moving file. [CMD:MOVE_FILE:source.txt:dest.txt]"
+"Opening website. [CMD:OPEN_URL:google.com]"
+"Refreshing page. [CMD:REFRESH_PAGE:]"
+"Going back. [CMD:GO_BACK:]"
+"Going forward. [CMD:GO_FORWARD:]"
+"Opening tab. [CMD:NEW_TAB:]"
+"Closing tab. [CMD:CLOSE_TAB:]"
+"Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
+"Clicking button. [CMD:CLICK_ELEMENT:Search]"
+"Double clicking. [CMD:DOUBLE_CLICK:file]"
+"Right clicking. [CMD:RIGHT_CLICK:menu]"
+"Typing text. [CMD:TYPE_TEXT:hello world]"
+"Clearing field. [CMD:CLEAR_FIELD:input]"
+"Selecting all. [CMD:SELECT_ALL:]"
+"Copying text. [CMD:COPY_TEXT:]"
+"Pasting text. [CMD:PASTE_TEXT:hello]"
+"Scrolling down. [CMD:SCROLL_PAGE:down]"
+"Scrolling up. [CMD:SCROLL_PAGE:up]"
+"Scrolling to top. [CMD:SCROLL_TO_TOP:]"
+"Scrolling to bottom. [CMD:SCROLL_TO_BOTTOM:]"
+"Dragging element. [CMD:DRAG_DROP:source:target]"
+"Pressing key. [CMD:KEY_PRESS:Enter]"
+"Pressing combination. [CMD:KEY_COMBINATION:Ctrl+C]"
+"Volume up. [CMD:VOLUME_UP:]"
+"Volume down. [CMD:VOLUME_DOWN:]"
+"Muting volume. [CMD:MUTE_VOLUME:]"
+"Brightness up. [CMD:BRIGHTNESS_UP:]"
+"Brightness down. [CMD:BRIGHTNESS_DOWN:]"
+"Locking screen. [CMD:LOCK_SCREEN:]"
+"Sleeping computer. [CMD:SLEEP_COMPUTER:]"
+"Getting time. [CMD:GET_TIME:]"
+"Getting date. [CMD:GET_DATE:]"
+"Searching web. [CMD:SEARCH_WEB:artificial intelligence]"
+"Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
+"Searching Wikipedia. [CMD:SEARCH_WIKIPEDIA:history]"
 
 Examples:
 User: "Open my downloads folder"
 You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
 
-User: "Launch Chrome"
-You: "Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+User: "Create a folder called TestFolder"
+You: "Creating folder. [CMD:CREATE_FOLDER:~/Downloads/TestFolder]"
+
+User: "Delete the old file"
+You: "Deleting file. [CMD:DELETE_FILE:~/Downloads/old.txt]"
+
+User: "Rename my document to final version"
+You: "Renaming file. [CMD:RENAME_FILE:~/Documents/draft.txt:final-version.txt]"
+
+User: "Copy this file to desktop"
+You: "Copying file. [CMD:COPY_FILE:~/Downloads/file.txt:~/Desktop/file.txt]"
+
+User: "Move this to trash"
+You: "Moving file. [CMD:MOVE_FILE:~/Downloads/temp.txt:~/Trash/temp.txt]"
+
+User: "Open Google"
+You: "Opening website. [CMD:OPEN_URL:google.com]"
+
+User: "Refresh the page"
+You: "Refreshing page. [CMD:REFRESH_PAGE:]"
+
+User: "Go back"
+You: "Going back. [CMD:GO_BACK:]"
+
+User: "Open new tab"
+You: "Opening tab. [CMD:NEW_TAB:]"
+
+User: "Take screenshot"
+You: "Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
+
+User: "Click the search button"
+You: "Clicking button. [CMD:CLICK_ELEMENT:Search]"
+
+User: "Double click the file"
+You: "Double clicking. [CMD:DOUBLE_CLICK:file]"
+
+User: "Right click here"
+You: "Right clicking. [CMD:RIGHT_CLICK:menu]"
+
+User: "Type hello world"
+You: "Typing text. [CMD:TYPE_TEXT:hello world]"
+
+User: "Clear the field"
+You: "Clearing field. [CMD:CLEAR_FIELD:input]"
+
+User: "Select all"
+You: "Selecting all. [CMD:SELECT_ALL:]"
+
+User: "Copy this text"
+You: "Copying text. [CMD:COPY_TEXT:]"
+
+User: "Paste hello"
+You: "Pasting text. [CMD:PASTE_TEXT:hello]"
+
+User: "Scroll down"
+You: "Scrolling down. [CMD:SCROLL_PAGE:down]"
+
+User: "Scroll to top"
+You: "Scrolling to top. [CMD:SCROLL_TO_TOP:]"
+
+User: "Drag this to there"
+You: "Dragging element. [CMD:DRAG_DROP:source:target]"
+
+User: "Press Enter"
+You: "Pressing key. [CMD:KEY_PRESS:Enter]"
+
+User: "Press Ctrl+C"
+You: "Pressing combination. [CMD:KEY_COMBINATION:Ctrl+C]"
+
+User: "Turn up the volume"
+You: "Volume up. [CMD:VOLUME_UP:]"
+
+User: "Make it brighter"
+You: "Brightness up. [CMD:BRIGHTNESS_UP:]"
+
+User: "Lock my computer"
+You: "Locking screen. [CMD:LOCK_SCREEN:]"
+
+User: "What time is it"
+You: "Getting time. [CMD:GET_TIME:]"
+
+User: "Search for AI"
+You: "Searching web. [CMD:SEARCH_WEB:artificial intelligence]"
+
+User: "Search YouTube for music"
+You: "Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
 
 MAX 3 words per response.`
       : `You are Atlas Voice. Keep responses under 5 words.`;
@@ -607,11 +867,74 @@ MAX 3 words per response.`
 // Map command type from AI response to API format
 function mapCommandType(cmdType, param) {
   const commandMap = {
+    // File & Folder Management
     'OPEN_FOLDER': { type: 'openFolder', param },
     'CREATE_FILE': { type: 'createFile', param },
+    'CREATE_FOLDER': { type: 'createFolder', param },
+    'DELETE_FILE': { type: 'deleteFile', param },
+    'DELETE_FOLDER': { type: 'deleteFolder', param },
+    'RENAME_FILE': { type: 'renameFile', param },
+    'COPY_FILE': { type: 'copyFile', param },
+    'MOVE_FILE': { type: 'moveFile', param },
     'FIND_FILE': { type: 'findFile', param },
+    'LIST_FILES': { type: 'listFiles', param },
+    
+    // Application Control
     'LAUNCH_APP': { type: 'runApp', param },
-    'LIST_FILES': { type: 'listFiles', param }
+    
+    // Browser Control
+    'OPEN_URL': { type: 'openUrl', param },
+    'REFRESH_PAGE': { type: 'refreshPage', param },
+    'GO_BACK': { type: 'goBack', param },
+    'GO_FORWARD': { type: 'goForward', param },
+    'NEW_TAB': { type: 'newTab', param },
+    'CLOSE_TAB': { type: 'closeTab', param },
+    'TAKE_SCREENSHOT': { type: 'takeScreenshot', param },
+    
+    // Element Interaction
+    'CLICK_ELEMENT': { type: 'clickElement', param },
+    'DOUBLE_CLICK': { type: 'doubleClick', param },
+    'RIGHT_CLICK': { type: 'rightClick', param },
+    'HOVER_ELEMENT': { type: 'hoverElement', param },
+    'TYPE_TEXT': { type: 'typeText', param },
+    'CLEAR_FIELD': { type: 'clearField', param },
+    'SELECT_ALL': { type: 'selectAll', param },
+    'COPY_TEXT': { type: 'copyText', param },
+    'PASTE_TEXT': { type: 'pasteText', param },
+    
+    // Page Control
+    'SCROLL_PAGE': { type: 'scrollPage', param },
+    'SCROLL_TO_TOP': { type: 'scrollToTop', param },
+    'SCROLL_TO_BOTTOM': { type: 'scrollToBottom', param },
+    
+    // Mouse Control
+    'MOUSE_CLICK': { type: 'mouseClick', param },
+    'MOUSE_MOVE': { type: 'mouseMove', param },
+    'DRAG_DROP': { type: 'dragDrop', param },
+    
+    // Keyboard Control
+    'KEY_PRESS': { type: 'keyPress', param },
+    'KEY_COMBINATION': { type: 'keyCombination', param },
+    
+    // System Control
+    'VOLUME_UP': { type: 'volumeUp', param },
+    'VOLUME_DOWN': { type: 'volumeDown', param },
+    'MUTE_VOLUME': { type: 'muteVolume', param },
+    'BRIGHTNESS_UP': { type: 'brightnessUp', param },
+    'BRIGHTNESS_DOWN': { type: 'brightnessDown', param },
+    'LOCK_SCREEN': { type: 'lockScreen', param },
+    'SLEEP_COMPUTER': { type: 'sleepComputer', param },
+    
+    // Information
+    'GET_PAGE_INFO': { type: 'getPageInfo', param },
+    'GET_TIME': { type: 'getTime', param },
+    'GET_DATE': { type: 'getDate', param },
+    'GET_WEATHER': { type: 'getWeather', param },
+    
+    // Search
+    'SEARCH_WEB': { type: 'searchWeb', param },
+    'SEARCH_YOUTUBE': { type: 'searchYoutube', param },
+    'SEARCH_WIKIPEDIA': { type: 'searchWikipedia', param }
   };
 
   return commandMap[cmdType] || null;
@@ -692,12 +1015,268 @@ async function executeDesktopCommand(command) {
         });
         return { success: true, message: `Done` };
 
+      case 'createFolder':
+        // For folder creation, we need to use the local server
+        // Chrome downloads API can't create folders
+        try {
+          const response = await fetch('http://localhost:8787/api/desktop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'createFolder', param })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            return { success: true, message: data.message || 'Done' };
+          } else {
+            return { error: 'Failed to create folder - server unavailable' };
+          }
+        } catch (error) {
+          return { error: 'Failed to create folder - server unavailable' };
+        }
+
+      case 'deleteFile':
+      case 'deleteFolder':
+      case 'renameFile':
+      case 'copyFile':
+      case 'moveFile':
+      case 'volumeUp':
+      case 'volumeDown':
+      case 'muteVolume':
+      case 'brightnessUp':
+      case 'brightnessDown':
+      case 'lockScreen':
+      case 'sleepComputer':
+        // These commands require the local server
+        try {
+          const response = await fetch('http://localhost:8787/api/desktop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, param })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            return { success: true, message: data.message || 'Done' };
+          } else {
+            return { error: `Failed to execute ${type} - server unavailable` };
+          }
+        } catch (error) {
+          return { error: `Failed to execute ${type} - server unavailable` };
+        }
+
+      case 'refreshPage':
+        const [refreshTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (refreshTab) {
+          await chrome.tabs.reload(refreshTab.id);
+          return { success: true, message: 'Page refreshed' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'goBack':
+        const [backTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (backTab) {
+          await chrome.tabs.goBack(backTab.id);
+          return { success: true, message: 'Went back' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'goForward':
+        const [forwardTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (forwardTab) {
+          await chrome.tabs.goForward(forwardTab.id);
+          return { success: true, message: 'Went forward' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'newTab':
+        await chrome.tabs.create({ active: true });
+        return { success: true, message: 'New tab opened' };
+
+      case 'closeTab':
+        const [closeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (closeTab) {
+          await chrome.tabs.remove(closeTab.id);
+          return { success: true, message: 'Tab closed' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'takeScreenshot':
+        return await executeBrowserCommand('takeScreenshot', {});
+
+      case 'doubleClick':
+        return await executeBrowserCommand('doubleClick', { text: param });
+
+      case 'rightClick':
+        return await executeBrowserCommand('rightClick', { text: param });
+
+      case 'hoverElement':
+        return await executeBrowserCommand('hoverElement', { text: param });
+
+      case 'clearField':
+        return await executeBrowserCommand('clearField', { selector: param });
+
+      case 'selectAll':
+        return await executeBrowserCommand('selectAll', {});
+
+      case 'copyText':
+        return await executeBrowserCommand('copyText', {});
+
+      case 'pasteText':
+        return await executeBrowserCommand('pasteText', { text: param });
+
+      case 'scrollToTop':
+        return await executeBrowserCommand('scrollPage', { direction: 'top' });
+
+      case 'scrollToBottom':
+        return await executeBrowserCommand('scrollPage', { direction: 'bottom' });
+
+      case 'dragDrop':
+        const [source, target] = param.split(':');
+        return await executeBrowserCommand('dragDrop', { source, target });
+
+      case 'keyPress':
+        return await executeBrowserCommand('keyPress', { key: param });
+
+      case 'keyCombination':
+        return await executeBrowserCommand('keyCombination', { keys: param });
+
+      case 'getTime':
+        const time = new Date().toLocaleTimeString();
+        return { success: true, message: `Current time: ${time}` };
+
+      case 'getDate':
+        const date = new Date().toLocaleDateString();
+        return { success: true, message: `Current date: ${date}` };
+
+      case 'getWeather':
+        return { success: false, message: 'Weather service not implemented' };
+
+      case 'searchWeb':
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(param)}`;
+        const [searchTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (searchTab) {
+          await chrome.tabs.update(searchTab.id, { url: searchUrl });
+          return { success: true, message: 'Searching web' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'searchYoutube':
+        const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(param)}`;
+        const [youtubeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (youtubeTab) {
+          await chrome.tabs.update(youtubeTab.id, { url: youtubeUrl });
+          return { success: true, message: 'Searching YouTube' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'searchWikipedia':
+        const wikiUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(param)}`;
+        const [wikiTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (wikiTab) {
+          await chrome.tabs.update(wikiTab.id, { url: wikiUrl });
+          return { success: true, message: 'Searching Wikipedia' };
+        }
+        return { error: 'No active tab found' };
+
+      case 'openUrl':
+        // Open URL in current tab instead of creating new one
+        let urlToOpen = param;
+        
+        // Add protocol if missing
+        if (!urlToOpen.startsWith('http://') && !urlToOpen.startsWith('https://')) {
+          urlToOpen = 'https://' + urlToOpen;
+        }
+        
+        // Get current active tab and update it
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (currentTab) {
+          await chrome.tabs.update(currentTab.id, {
+            url: urlToOpen,
+            active: true
+          });
+        } else {
+          // Fallback: create new tab if no active tab found
+          await chrome.tabs.create({
+            url: urlToOpen,
+            active: true
+          });
+        }
+        return { success: true, message: `Done` };
+
+      case 'clickElement':
+        return await executeBrowserCommand('clickElement', { text: param });
+
+      case 'typeText':
+        return await executeBrowserCommand('typeText', { 
+          selector: 'input[type="text"], input[type="search"], textarea', 
+          text: param 
+        });
+
+      case 'scrollPage':
+        return await executeBrowserCommand('scrollPage', { 
+          direction: param.toLowerCase() || 'down' 
+        });
+
+      case 'getPageInfo':
+        return await executeBrowserCommand('getPageInfo', {});
+
+      case 'mouseClick':
+        // Smart mouse click - if param contains text, find element first
+        if (isNaN(param) && !param.includes(',')) {
+          // Text-based click (e.g., "login", "search", "submit")
+          return await executeBrowserCommand('clickElement', { text: param });
+        } else {
+          // Coordinate-based click (e.g., "100,200")
+          const coords = param.split(',').map(Number);
+          if (coords.length === 2) {
+            return await executeBrowserCommand('mouseClick', { 
+              x: coords[0], 
+              y: coords[1] 
+            });
+          }
+          return { error: 'Invalid coordinates format. Use: x,y or element text' };
+        }
+
+      case 'mouseMove':
+        const moveCoords = param.split(',').map(Number);
+        if (moveCoords.length === 2) {
+          return await executeBrowserCommand('mouseMove', { 
+            x: moveCoords[0], 
+            y: moveCoords[1] 
+          });
+        }
+        return { error: 'Invalid coordinates format. Use: x,y' };
+
       default:
         return { error: 'Unknown command' };
     }
   } catch (err) {
     console.error('Desktop command error:', err);
     return { error: err.message };
+  }
+}
+
+// Execute browser automation commands via content script
+async function executeBrowserCommand(action, params) {
+  try {
+    // Get the current active tab
+    const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    if (!currentTab) {
+      return { error: 'No active tab found' };
+    }
+
+    // Send message to content script
+    const response = await chrome.tabs.sendMessage(currentTab.id, {
+      action: action,
+      ...params
+    });
+
+    return response;
+  } catch (error) {
+    console.error('Browser command error:', error);
+    return { error: error.message };
   }
 }
 
@@ -916,6 +1495,96 @@ els.skipPermissionBtn.addEventListener('click', () => {
   els.orbStatus.textContent = 'Click Connect in menu to start (microphone permission needed)';
 });
 
+// Help toggle functionality
+els.toggleHelpBtn.addEventListener('click', () => {
+  const isVisible = els.helpContent.style.display !== 'none';
+  
+  if (isVisible) {
+    els.helpContent.style.display = 'none';
+    els.toggleHelpBtn.textContent = 'Show Commands';
+  } else {
+    els.helpContent.style.display = 'block';
+    els.toggleHelpBtn.textContent = 'Hide Commands';
+  }
+});
+
+// Temperature slider functionality
+els.temperatureSlider.addEventListener('input', (e) => {
+  const value = parseFloat(e.target.value);
+  els.temperatureValue.textContent = value.toFixed(1);
+  
+  // Save temperature setting
+  localStorage.setItem('atlasVoice_temperature', value.toString());
+  
+  // Update AI instructions with new temperature if connected
+  if (connected && dataChannel) {
+    updateAIInstructions();
+  }
+});
+
+// Memory enabled toggle
+els.memoryEnabled.addEventListener('change', (e) => {
+  const enabled = e.target.checked;
+  localStorage.setItem('atlasVoice_memoryEnabled', enabled.toString());
+  
+  // Update AI instructions with memory setting if connected
+  if (connected && dataChannel) {
+    updateAIInstructions();
+  }
+});
+
+// Special instructions textarea
+els.specialInstructions.addEventListener('input', (e) => {
+  const instructions = e.target.value;
+  localStorage.setItem('atlasVoice_specialInstructions', instructions);
+  
+  // Update AI instructions with new special instructions if connected
+  if (connected && dataChannel) {
+    updateAIInstructions();
+  }
+});
+
+// View knowledge base
+els.viewKnowledgeBtn.addEventListener('click', async () => {
+  try {
+    const response = await fetch('http://localhost:8787/api/knowledge', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      showKnowledgeModal(data);
+    } else {
+      alert('Failed to load knowledge base');
+    }
+  } catch (error) {
+    console.error('Error loading knowledge:', error);
+    alert('Failed to connect to knowledge base');
+  }
+});
+
+// Clear memory
+els.clearMemoryBtn.addEventListener('click', async () => {
+  if (confirm('Are you sure you want to clear Atlas\'s memory? This cannot be undone.')) {
+    try {
+      const response = await fetch('http://localhost:8787/api/knowledge/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        alert('Memory cleared successfully!');
+      } else {
+        alert('Failed to clear memory');
+      }
+    } catch (error) {
+      console.error('Error clearing memory:', error);
+      alert('Failed to connect to knowledge base');
+    }
+  }
+});
+
 // Load saved settings from localStorage
 function loadSettings() {
   console.log('💾 Loading saved settings...');
@@ -923,8 +1592,11 @@ function loadSettings() {
   const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
   const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
   const savedVisionMode = localStorage.getItem('atlasVoice_visionMode');
+  const savedTemperature = localStorage.getItem('atlasVoice_temperature');
+  const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
+  const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -949,6 +1621,22 @@ function loadSettings() {
     document.getElementById('captureScreenContainer').style.display = 'block';
     console.log('✅ Vision mode restored');
   }
+
+  if (savedTemperature) {
+    els.temperatureSlider.value = savedTemperature;
+    els.temperatureValue.textContent = parseFloat(savedTemperature).toFixed(1);
+    console.log('✅ Temperature restored:', savedTemperature);
+  }
+
+  if (savedMemoryEnabled === 'true') {
+    els.memoryEnabled.checked = true;
+    console.log('✅ Memory enabled restored');
+  }
+
+  if (savedSpecialInstructions) {
+    els.specialInstructions.value = savedSpecialInstructions;
+    console.log('✅ Special instructions restored');
+  }
 }
 
 // Save settings to localStorage
@@ -957,7 +1645,10 @@ function saveSettings() {
     serverUrl: els.serverUrl.value,
     desktopMode: els.desktopMode.checked,
     continuousMode: els.continuousMode.checked,
-    visionMode: els.visionMode.checked
+    visionMode: els.visionMode.checked,
+    temperature: els.temperatureSlider.value,
+    memoryEnabled: els.memoryEnabled.checked,
+    specialInstructions: els.specialInstructions.value
   };
 
   console.log('💾 Saving settings:', settings);
@@ -966,12 +1657,117 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
   localStorage.setItem('atlasVoice_continuousMode', String(settings.continuousMode));
   localStorage.setItem('atlasVoice_visionMode', String(settings.visionMode));
+  localStorage.setItem('atlasVoice_temperature', settings.temperature);
+  localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
+  localStorage.setItem('atlasVoice_specialInstructions', settings.specialInstructions);
 
   console.log('✅ Settings saved');
 }
 
+// Show knowledge base modal
+function showKnowledgeModal(data) {
+  const modal = document.createElement('div');
+  modal.className = 'knowledge-modal';
+  modal.innerHTML = `
+    <div class="knowledge-modal-content">
+      <div class="knowledge-modal-header">
+        <h3>🧠 Atlas Knowledge Base</h3>
+        <button class="knowledge-modal-close">&times;</button>
+      </div>
+      <div class="knowledge-modal-body">
+        <div class="knowledge-section">
+          <h4>📝 Memory Entries (${data.memory?.length || 0})</h4>
+          <div class="knowledge-list">
+            ${data.memory?.map(m => `
+              <div class="knowledge-item">
+                <div class="knowledge-item-header">
+                  <span class="knowledge-type">${m.memory_type}</span>
+                  <span class="knowledge-score">${m.importance_score}/10</span>
+                </div>
+                <div class="knowledge-content">${m.content}</div>
+                <div class="knowledge-meta">Accessed ${m.access_count} times</div>
+              </div>
+            `).join('') || '<p>No memory entries yet</p>'}
+          </div>
+        </div>
+        
+        <div class="knowledge-section">
+          <h4>🔍 Learned Patterns (${data.patterns?.length || 0})</h4>
+          <div class="knowledge-list">
+            ${data.patterns?.map(p => `
+              <div class="knowledge-item">
+                <div class="knowledge-item-header">
+                  <span class="knowledge-type">${p.pattern_type}</span>
+                  <span class="knowledge-score">${Math.round(p.confidence_score * 100)}%</span>
+                </div>
+                <div class="knowledge-content">${JSON.stringify(p.pattern_data, null, 2)}</div>
+                <div class="knowledge-meta">Seen ${p.frequency} times</div>
+              </div>
+            `).join('') || '<p>No patterns learned yet</p>'}
+          </div>
+        </div>
+        
+        <div class="knowledge-section">
+          <h4>📚 Knowledge Base (${data.knowledge?.length || 0})</h4>
+          <div class="knowledge-list">
+            ${data.knowledge?.map(k => `
+              <div class="knowledge-item">
+                <div class="knowledge-item-header">
+                  <span class="knowledge-type">${k.category}</span>
+                  <span class="knowledge-score">${k.title}</span>
+                </div>
+                <div class="knowledge-content">${k.content}</div>
+                <div class="knowledge-meta">Accessed ${k.access_count} times</div>
+              </div>
+            `).join('') || '<p>No knowledge entries yet</p>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close modal functionality
+  modal.querySelector('.knowledge-modal-close').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  });
+}
+
 // Initialize
 loadSettings();
+
+// Immediately ensure voice orb is visible
+els.voiceOrbWrapper.classList.remove('hidden');
+els.voiceOrbWrapper.style.display = 'flex';
+els.voiceOrbWrapper.style.opacity = '1';
+els.voiceOrbWrapper.style.visibility = 'visible';
+els.chatContainer.style.display = 'none';
+els.chatContainer.innerHTML = '';
+
+// Reset UI to show voice orb on startup
+setTimeout(() => {
+  els.voiceOrbWrapper.classList.remove('hidden');
+  els.chatContainer.style.display = 'none';
+  els.chatContainer.innerHTML = '';
+
+  // Force voice orb to be visible
+  els.voiceOrbWrapper.style.display = 'flex';
+  els.voiceOrbWrapper.style.opacity = '1';
+  els.voiceOrbWrapper.style.visibility = 'visible';
+
+  // Debug: Ensure voice orb is visible
+  console.log('🎯 Voice orb wrapper classes:', els.voiceOrbWrapper.className);
+  console.log('🎯 Voice orb wrapper display:', window.getComputedStyle(els.voiceOrbWrapper).display);
+  console.log('🎯 Voice orb wrapper visibility:', window.getComputedStyle(els.voiceOrbWrapper).visibility);
+}, 100);
+
 setupPressToTalk();
 setupContinuousMode();
 webSpeechFallbackSetup();
