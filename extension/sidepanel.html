@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Atlas Voice Panel</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Atlas Voice</h1>
+    <small>Powered by OpenAI Realtime</small>
+  </header>
+
+  <main>
+    <div class="connection">
+      <label>Server URL
+        <input id="serverUrl" placeholder="http://localhost:8787" />
+      </label>
+      <button id="connectBtn">Connect</button>
+      <span id="status">disconnected</span>
+    </div>
+
+    <div class="controls">
+      <button id="pttBtn" class="primary">
+        <img src="assets/mic.svg" alt="" />
+        Hold to talk
+      </button>
+      <button id="interruptBtn" disabled>Interrupt</button>
+      <select id="voiceSelect"></select>
+    </div>
+
+    <section class="transcripts">
+      <div>
+        <h3>You</h3>
+        <pre id="youText"></pre>
+      </div>
+      <div>
+        <h3>Assistant</h3>
+        <pre id="aiText"></pre>
+      </div>
+    </section>
+
+    <details>
+      <summary>Fallback (Web Speech)</summary>
+      <div class="fallback">
+        <button id="recStart">Start STT</button>
+        <button id="recStop">Stop STT</button>
+        <button id="ttsSay">Speak last reply</button>
+      </div>
+    </details>
+  </main>
+
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>

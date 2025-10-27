@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Atlas Voice Panel",
+  "version": "0.1.0",
+  "description": "Side panel that wraps ChatGPT Voice via OpenAI Realtime API (WebRTC) with Web Speech fallback.",
+  "permissions": ["storage", "sidePanel", "activeTab"],
+  "host_permissions": ["https://api.openai.com/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Atlas Voice Panel" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "icons": {},
+  "web_accessible_resources": [{
+    "resources": ["assets/mic.svg"],
+    "matches": ["<all_urls>"]
+  }]
+}
