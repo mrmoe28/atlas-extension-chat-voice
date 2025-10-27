@@ -30,6 +30,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-height: 600px;
   width: 100%;
   position: relative;
 }
@@ -254,15 +255,10 @@ h1 {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  min-height: 400px;
 }
 
 /* Large Centered Voice Orb */
-.voice-orb-wrapper.hidden {
-  opacity: 0;
-  pointer-events: none;
-  display: none !important;
-}
-
 .voice-orb-wrapper {
   position: absolute;
   top: 0;
@@ -278,6 +274,12 @@ h1 {
   z-index: 1;
   opacity: 1 !important;
   visibility: visible !important;
+}
+
+.voice-orb-wrapper.hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+  display: none !important;
 }
 
 .voice-orb-large {

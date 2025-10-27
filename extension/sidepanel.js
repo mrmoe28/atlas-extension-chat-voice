@@ -1743,6 +1743,14 @@ function showKnowledgeModal(data) {
 // Initialize
 loadSettings();
 
+// Immediately ensure voice orb is visible
+els.voiceOrbWrapper.classList.remove('hidden');
+els.voiceOrbWrapper.style.display = 'flex';
+els.voiceOrbWrapper.style.opacity = '1';
+els.voiceOrbWrapper.style.visibility = 'visible';
+els.chatContainer.style.display = 'none';
+els.chatContainer.innerHTML = '';
+
 // Reset UI to show voice orb on startup
 setTimeout(() => {
   els.voiceOrbWrapper.classList.remove('hidden');
