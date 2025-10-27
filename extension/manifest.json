@@ -10,7 +10,9 @@
     "desktopCapture",
     "tabCapture",
     "tabs",
-    "downloads"
+    "downloads",
+    "scripting",
+    "webNavigation"
   ],
   "host_permissions": [
     "https://api.openai.com/*",
@@ -21,6 +23,11 @@
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Atlas Voice Panel" },
   "side_panel": { "default_path": "sidepanel.html" },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "run_at": "document_end"
+  }],
   "icons": {},
   "web_accessible_resources": [{
     "resources": ["assets/mic.svg"],

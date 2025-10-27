@@ -90,6 +90,61 @@ app.post('/api/desktop', async (req, res) => {
         message = `Created file: ${param}`;
         break;
 
+      case 'createFolder':
+        // Expand ~ to home directory
+        const expandedFolderPath = param.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        command = process.platform === 'win32'
+          ? `mkdir "${expandedFolderPath}"`
+          : `mkdir -p "${expandedFolderPath}"`;
+        message = `Created folder: ${param}`;
+        break;
+
+      case 'deleteFile':
+        const expandedDeletePath = param.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        command = process.platform === 'win32'
+          ? `del "${expandedDeletePath}"`
+          : `rm "${expandedDeletePath}"`;
+        message = `Deleted file: ${param}`;
+        break;
+
+      case 'deleteFolder':
+        const expandedDeleteFolderPath = param.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        command = process.platform === 'win32'
+          ? `rmdir /s /q "${expandedDeleteFolderPath}"`
+          : `rm -rf "${expandedDeleteFolderPath}"`;
+        message = `Deleted folder: ${param}`;
+        break;
+
+      case 'renameFile':
+        const [oldPath, newPath] = param.split(':');
+        const expandedOldPath = oldPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        const expandedNewPath = newPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        command = process.platform === 'win32'
+          ? `ren "${expandedOldPath}" "${expandedNewPath}"`
+          : `mv "${expandedOldPath}" "${expandedNewPath}"`;
+        message = `Renamed: ${oldPath} → ${newPath}`;
+        break;
+
+      case 'copyFile':
+        const [sourcePath, destPath] = param.split(':');
+        const expandedSourcePath = sourcePath.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        const expandedDestPath = destPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        command = process.platform === 'win32'
+          ? `copy "${expandedSourcePath}" "${expandedDestPath}"`
+          : `cp -r "${expandedSourcePath}" "${expandedDestPath}"`;
+        message = `Copied: ${sourcePath} → ${destPath}`;
+        break;
+
+      case 'moveFile':
+        const [moveSourcePath, moveDestPath] = param.split(':');
+        const expandedMoveSourcePath = moveSourcePath.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        const expandedMoveDestPath = moveDestPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
+        command = process.platform === 'win32'
+          ? `move "${expandedMoveSourcePath}" "${expandedMoveDestPath}"`
+          : `mv "${expandedMoveSourcePath}" "${expandedMoveDestPath}"`;
+        message = `Moved: ${moveSourcePath} → ${moveDestPath}`;
+        break;
+
       case 'findFile':
         command = process.platform === 'win32'
           ? `where /R . "${param}"`
@@ -119,6 +174,70 @@ app.post('/api/desktop', async (req, res) => {
           message: `Files in ${dir}:\n${listResult}`,
           result: listResult
         });
+
+      // System Control Commands
+      case 'volumeUp':
+        command = process.platform === 'darwin'
+          ? `osascript -e "set volume output volume (output volume of (get volume settings) + 10)"`
+          : process.platform === 'win32'
+          ? `powershell -c "[audio]::Volume += 0.1"`
+          : `amixer set Master 10%+`;
+        message = `Volume increased`;
+        break;
+
+      case 'volumeDown':
+        command = process.platform === 'darwin'
+          ? `osascript -e "set volume output volume (output volume of (get volume settings) - 10)"`
+          : process.platform === 'win32'
+          ? `powershell -c "[audio]::Volume -= 0.1"`
+          : `amixer set Master 10%-`;
+        message = `Volume decreased`;
+        break;
+
+      case 'muteVolume':
+        command = process.platform === 'darwin'
+          ? `osascript -e "set volume output muted true"`
+          : process.platform === 'win32'
+          ? `powershell -c "[audio]::Volume = 0"`
+          : `amixer set Master mute`;
+        message = `Volume muted`;
+        break;
+
+      case 'brightnessUp':
+        command = process.platform === 'darwin'
+          ? `osascript -e "tell application \\"System Events\\" to key code 144"`
+          : process.platform === 'win32'
+          ? `powershell -c "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,80)"`
+          : `xrandr --output $(xrandr | grep ' connected' | head -n1 | cut -d' ' -f1) --brightness 0.8`;
+        message = `Brightness increased`;
+        break;
+
+      case 'brightnessDown':
+        command = process.platform === 'darwin'
+          ? `osascript -e "tell application \\"System Events\\" to key code 145"`
+          : process.platform === 'win32'
+          ? `powershell -c "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,20)"`
+          : `xrandr --output $(xrandr | grep ' connected' | head -n1 | cut -d' ' -f1) --brightness 0.2`;
+        message = `Brightness decreased`;
+        break;
+
+      case 'lockScreen':
+        command = process.platform === 'darwin'
+          ? `osascript -e "tell application \\"System Events\\" to keystroke \\"q\\" using {command down, control down}"`
+          : process.platform === 'win32'
+          ? `rundll32.exe user32.dll,LockWorkStation`
+          : `gnome-screensaver-command -l`;
+        message = `Screen locked`;
+        break;
+
+      case 'sleepComputer':
+        command = process.platform === 'darwin'
+          ? `osascript -e "tell application \\"System Events\\" to sleep"`
+          : process.platform === 'win32'
+          ? `rundll32.exe powrprof.dll,SetSuspendState 0,1,0`
+          : `systemctl suspend`;
+        message = `Computer sleeping`;
+        break;
 
       default:
         return res.status(400).json({ error: 'Unknown command type' });
