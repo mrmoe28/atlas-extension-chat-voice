@@ -186,12 +186,92 @@ You: "Can't check weather."
 MAX 3 words per response.`
         : `You are Atlas Voice. Keep responses under 5 words.`;
 
-      // Send session update with instructions
+      // Define tools for function calling
+      const tools = isDesktopMode ? [
+        {
+          type: 'function',
+          name: 'open_webpage',
+          description: 'Opens a webpage in the browser. Can open any URL or search on Google.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: {
+                type: 'string',
+                description: 'The URL to open (e.g., https://google.com, https://youtube.com) or search query'
+              }
+            },
+            required: ['url']
+          }
+        },
+        {
+          type: 'function',
+          name: 'open_folder',
+          description: 'Opens a folder on the user\'s desktop. Ask for clarification if folder name is unclear.',
+          parameters: {
+            type: 'object',
+            properties: {
+              folder_name: {
+                type: 'string',
+                description: 'The folder to open (e.g., Downloads, Documents, Desktop)'
+              }
+            },
+            required: ['folder_name']
+          }
+        },
+        {
+          type: 'function',
+          name: 'launch_app',
+          description: 'Launches an application on the user\'s Mac. Ask for app name if unclear.',
+          parameters: {
+            type: 'object',
+            properties: {
+              app_name: {
+                type: 'string',
+                description: 'The application name (e.g., Chrome, Safari, Finder)'
+              }
+            },
+            required: ['app_name']
+          }
+        },
+        {
+          type: 'function',
+          name: 'create_file',
+          description: 'Creates a new file. MUST ask user for filename and location before calling this.',
+          parameters: {
+            type: 'object',
+            properties: {
+              filename: {
+                type: 'string',
+                description: 'The name of the file to create'
+              },
+              location: {
+                type: 'string',
+                description: 'Where to save (Downloads, Documents, Desktop)'
+              }
+            },
+            required: ['filename', 'location']
+          }
+        }
+      ] : [];
+
+      // Send session update with instructions and tools
       dataChannel.send(JSON.stringify({
         type: 'session.update',
         session: {
-          instructions: instructions,
+          instructions: isDesktopMode
+            ? `You are Atlas Voice, a helpful desktop assistant. Be conversational and natural.
+
+IMPORTANT:
+- ALWAYS ask clarifying questions before taking actions
+- If user says "create a file", ask "What would you like to name it?" and "Where should I save it?"
+- If user says "open folder", ask which folder if unclear
+- Be friendly and helpful, not robotic
+- Keep responses concise but complete
+- Never show function syntax to users`
+            : `You are Atlas Voice, a helpful AI assistant. Be conversational and concise.`,
           voice: 'alloy',
+          tools: tools,
+          tool_choice: 'auto',
           input_audio_transcription: {
             model: 'whisper-1'
           },
@@ -210,30 +290,76 @@ MAX 3 words per response.`
         const msg = JSON.parse(e.data);
         console.log('Server event:', msg);
 
+        // Handle user transcript
         if (msg.type === 'conversation.item.input_audio_transcription.completed') {
           if (msg.transcript && currentUserMessage !== msg.transcript) {
             currentUserMessage = msg.transcript;
             addMessage('user', msg.transcript);
-
-            // Check for desktop commands if in desktop mode
-            if (isDesktopMode) {
-              const desktopCmd = parseDesktopCommand(msg.transcript);
-              if (desktopCmd) {
-                console.log('Desktop command detected:', desktopCmd);
-                showTypingIndicator();
-                const result = await executeDesktopCommand(desktopCmd);
-                removeTypingIndicator();
-
-                if (result.error) {
-                  addMessage('assistant', `❌ Error: ${result.error}`);
-                } else {
-                  addMessage('assistant', `✅ ${result.message || 'Command executed successfully'}`);
-                }
-              }
-            }
           }
         }
 
+        // Handle function calls from OpenAI
+        if (msg.type === 'response.function_call_arguments.done') {
+          const functionName = msg.name;
+          const args = JSON.parse(msg.arguments);
+          const callId = msg.call_id;
+
+          console.log('Function call:', functionName, args);
+
+          // Execute the function
+          let result = { success: false, error: 'Unknown function' };
+
+          if (functionName === 'open_webpage') {
+            let url = args.url;
+            // If no protocol, check if it's a search query or URL
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+              // Check if it looks like a domain
+              if (url.includes('.com') || url.includes('.org') || url.includes('.net') || url.includes('.io')) {
+                url = 'https://' + url;
+              } else {
+                // Treat as search query
+                url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+              }
+            }
+            await chrome.tabs.create({ url: url, active: true });
+            result = { success: true, message: `Opened ${url}` };
+            addMessage('assistant', '✅ Opening page');
+          } else if (functionName === 'open_folder') {
+            await chrome.downloads.showDefaultFolder();
+            result = { success: true, message: 'Opened Downloads folder' };
+            addMessage('assistant', '✅ Opening Downloads');
+          } else if (functionName === 'launch_app') {
+            const appName = args.app_name.replace(/\s/g, '%20');
+            await chrome.tabs.create({
+              url: `file:///Applications/${appName}.app`,
+              active: true
+            });
+            result = { success: true, message: `Launched ${args.app_name}` };
+            addMessage('assistant', `✅ Launching ${args.app_name}`);
+          } else if (functionName === 'create_file') {
+            const blob = new Blob([''], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            await chrome.downloads.download({
+              url: url,
+              filename: args.filename,
+              saveAs: false
+            });
+            result = { success: true, message: `Created ${args.filename}` };
+            addMessage('assistant', `✅ Creating ${args.filename}`);
+          }
+
+          // Send function result back to OpenAI
+          dataChannel.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify(result)
+            }
+          }));
+        }
+
+        // Handle AI text responses
         if (msg.type === 'response.text.delta') {
           currentAIMessage += msg.delta || '';
         }
@@ -241,30 +367,7 @@ MAX 3 words per response.`
         if (msg.type === 'response.text.done' || msg.type === 'response.done') {
           if (currentAIMessage) {
             removeTypingIndicator();
-
-            // Parse for desktop commands if in desktop mode
-            let displayMessage = currentAIMessage;
-            if (isDesktopMode) {
-              const cmdMatch = currentAIMessage.match(/\[CMD:([A-Z_]+):(.+?)\]/);
-              if (cmdMatch) {
-                const [fullMatch, cmdType, cmdParam] = cmdMatch;
-                displayMessage = currentAIMessage.replace(fullMatch, '').trim();
-
-                // Execute the command
-                const command = mapCommandType(cmdType, cmdParam);
-                if (command) {
-                  console.log('Executing desktop command:', command);
-                  executeDesktopCommand(command).then(result => {
-                    if (result.error) {
-                      addMessage('assistant', `❌ ${result.error}`);
-                    }
-                    // Success - no message needed, AI already confirmed
-                  });
-                }
-              }
-            }
-
-            addMessage('assistant', displayMessage);
+            addMessage('assistant', currentAIMessage);
             currentAIMessage = '';
           }
         }
@@ -402,6 +505,7 @@ els.continuousMode.addEventListener('change', () => {
   }
 
   els.voiceStatus.textContent = isContinuousMode ? 'Click to talk' : 'Hold to talk';
+  saveSettings();
 });
 
 // Desktop mode toggle
@@ -446,6 +550,8 @@ MAX 3 words per response.`
 
     console.log('Updated session instructions:', isDesktopMode ? 'Desktop Commander enabled' : 'Standard mode');
   }
+
+  saveSettings();
 });
 
 // Map command type from AI response to API format
@@ -620,6 +726,13 @@ els.visionMode.addEventListener('change', () => {
     captureContainer.style.display = 'none';
     lastScreenshot = null;
   }
+
+  saveSettings();
+});
+
+// Save server URL when changed
+els.serverUrl.addEventListener('change', () => {
+  saveSettings();
 });
 
 // Screen Capture Functionality
@@ -737,7 +850,45 @@ els.skipPermissionBtn.addEventListener('click', () => {
   els.orbStatus.textContent = 'Click Connect in menu to start (microphone permission needed)';
 });
 
+// Load saved settings from localStorage
+function loadSettings() {
+  const savedServerUrl = localStorage.getItem('atlasVoice_serverUrl');
+  const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
+  const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
+  const savedVisionMode = localStorage.getItem('atlasVoice_visionMode');
+
+  if (savedServerUrl) {
+    els.serverUrl.value = savedServerUrl;
+  }
+
+  if (savedDesktopMode === 'true') {
+    els.desktopMode.checked = true;
+    isDesktopMode = true;
+    els.voiceOrb.classList.add('desktop-mode');
+  }
+
+  if (savedContinuousMode === 'true') {
+    els.continuousMode.checked = true;
+    isContinuousMode = true;
+  }
+
+  if (savedVisionMode === 'true') {
+    els.visionMode.checked = true;
+    isVisionMode = true;
+    document.getElementById('captureScreenContainer').style.display = 'block';
+  }
+}
+
+// Save settings to localStorage
+function saveSettings() {
+  localStorage.setItem('atlasVoice_serverUrl', els.serverUrl.value);
+  localStorage.setItem('atlasVoice_desktopMode', els.desktopMode.checked);
+  localStorage.setItem('atlasVoice_continuousMode', els.continuousMode.checked);
+  localStorage.setItem('atlasVoice_visionMode', els.visionMode.checked);
+}
+
 // Initialize
+loadSettings();
 setupPressToTalk();
 setupContinuousMode();
 webSpeechFallbackSetup();
