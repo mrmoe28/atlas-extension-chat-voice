@@ -20,6 +20,78 @@ app.use((req, res, next) => {
   next();
 });
 
+// Knowledge Base API endpoints
+app.get('/api/knowledge', async (req, res) => {
+  try {
+    // This would connect to your PostgreSQL database
+    // For now, return mock data
+    const mockData = {
+      memory: [
+        {
+          id: 1,
+          memory_type: 'preference',
+          content: 'User prefers concise responses',
+          importance_score: 8,
+          access_count: 5,
+          created_at: new Date().toISOString()
+        }
+      ],
+      patterns: [
+        {
+          id: 1,
+          pattern_type: 'command_usage',
+          pattern_data: { command: 'OPEN_FOLDER', frequency: 10 },
+          confidence_score: 0.9,
+          frequency: 10,
+          first_seen: new Date().toISOString()
+        }
+      ],
+      knowledge: [
+        {
+          id: 1,
+          category: 'fact',
+          title: 'User\'s Downloads folder',
+          content: 'User frequently accesses ~/Downloads folder',
+          access_count: 15,
+          created_at: new Date().toISOString()
+        }
+      ]
+    };
+    
+    res.json(mockData);
+  } catch (error) {
+    console.error('Error fetching knowledge:', error);
+    res.status(500).json({ error: 'Failed to fetch knowledge base' });
+  }
+});
+
+app.post('/api/knowledge/clear', async (req, res) => {
+  try {
+    // This would clear the database tables
+    // For now, just return success
+    res.json({ message: 'Memory cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing memory:', error);
+    res.status(500).json({ error: 'Failed to clear memory' });
+  }
+});
+
+app.post('/api/knowledge/memory', async (req, res) => {
+  try {
+    const { user_id, memory_type, content, importance_score, context } = req.body;
+    
+    // This would insert into the atlas_memory table
+    // For now, just return success
+    res.json({ 
+      message: 'Memory saved successfully',
+      id: Date.now() // Mock ID
+    });
+  } catch (error) {
+    console.error('Error saving memory:', error);
+    res.status(500).json({ error: 'Failed to save memory' });
+  }
+});
+
 // Simple health
 app.get('/', (_, res) => res.send('OK'));
 

@@ -27,7 +27,13 @@ const els = {
   requestPermissionBtn: document.getElementById('requestPermissionBtn'),
   skipPermissionBtn: document.getElementById('skipPermissionBtn'),
   toggleHelpBtn: document.getElementById('toggleHelpBtn'),
-  helpContent: document.getElementById('helpContent')
+  helpContent: document.getElementById('helpContent'),
+  temperatureSlider: document.getElementById('temperatureSlider'),
+  temperatureValue: document.getElementById('temperatureValue'),
+  memoryEnabled: document.getElementById('memoryEnabled'),
+  specialInstructions: document.getElementById('specialInstructions'),
+  viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
+  clearMemoryBtn: document.getElementById('clearMemoryBtn')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -1502,6 +1508,83 @@ els.toggleHelpBtn.addEventListener('click', () => {
   }
 });
 
+// Temperature slider functionality
+els.temperatureSlider.addEventListener('input', (e) => {
+  const value = parseFloat(e.target.value);
+  els.temperatureValue.textContent = value.toFixed(1);
+  
+  // Save temperature setting
+  localStorage.setItem('atlasVoice_temperature', value.toString());
+  
+  // Update AI instructions with new temperature if connected
+  if (connected && dataChannel) {
+    updateAIInstructions();
+  }
+});
+
+// Memory enabled toggle
+els.memoryEnabled.addEventListener('change', (e) => {
+  const enabled = e.target.checked;
+  localStorage.setItem('atlasVoice_memoryEnabled', enabled.toString());
+  
+  // Update AI instructions with memory setting if connected
+  if (connected && dataChannel) {
+    updateAIInstructions();
+  }
+});
+
+// Special instructions textarea
+els.specialInstructions.addEventListener('input', (e) => {
+  const instructions = e.target.value;
+  localStorage.setItem('atlasVoice_specialInstructions', instructions);
+  
+  // Update AI instructions with new special instructions if connected
+  if (connected && dataChannel) {
+    updateAIInstructions();
+  }
+});
+
+// View knowledge base
+els.viewKnowledgeBtn.addEventListener('click', async () => {
+  try {
+    const response = await fetch('http://localhost:8787/api/knowledge', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      showKnowledgeModal(data);
+    } else {
+      alert('Failed to load knowledge base');
+    }
+  } catch (error) {
+    console.error('Error loading knowledge:', error);
+    alert('Failed to connect to knowledge base');
+  }
+});
+
+// Clear memory
+els.clearMemoryBtn.addEventListener('click', async () => {
+  if (confirm('Are you sure you want to clear Atlas\'s memory? This cannot be undone.')) {
+    try {
+      const response = await fetch('http://localhost:8787/api/knowledge/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        alert('Memory cleared successfully!');
+      } else {
+        alert('Failed to clear memory');
+      }
+    } catch (error) {
+      console.error('Error clearing memory:', error);
+      alert('Failed to connect to knowledge base');
+    }
+  }
+});
+
 // Load saved settings from localStorage
 function loadSettings() {
   console.log('💾 Loading saved settings...');
@@ -1509,8 +1592,11 @@ function loadSettings() {
   const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
   const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
   const savedVisionMode = localStorage.getItem('atlasVoice_visionMode');
+  const savedTemperature = localStorage.getItem('atlasVoice_temperature');
+  const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
+  const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -1535,6 +1621,22 @@ function loadSettings() {
     document.getElementById('captureScreenContainer').style.display = 'block';
     console.log('✅ Vision mode restored');
   }
+
+  if (savedTemperature) {
+    els.temperatureSlider.value = savedTemperature;
+    els.temperatureValue.textContent = parseFloat(savedTemperature).toFixed(1);
+    console.log('✅ Temperature restored:', savedTemperature);
+  }
+
+  if (savedMemoryEnabled === 'true') {
+    els.memoryEnabled.checked = true;
+    console.log('✅ Memory enabled restored');
+  }
+
+  if (savedSpecialInstructions) {
+    els.specialInstructions.value = savedSpecialInstructions;
+    console.log('✅ Special instructions restored');
+  }
 }
 
 // Save settings to localStorage
@@ -1543,7 +1645,10 @@ function saveSettings() {
     serverUrl: els.serverUrl.value,
     desktopMode: els.desktopMode.checked,
     continuousMode: els.continuousMode.checked,
-    visionMode: els.visionMode.checked
+    visionMode: els.visionMode.checked,
+    temperature: els.temperatureSlider.value,
+    memoryEnabled: els.memoryEnabled.checked,
+    specialInstructions: els.specialInstructions.value
   };
 
   console.log('💾 Saving settings:', settings);
@@ -1552,17 +1657,108 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
   localStorage.setItem('atlasVoice_continuousMode', String(settings.continuousMode));
   localStorage.setItem('atlasVoice_visionMode', String(settings.visionMode));
+  localStorage.setItem('atlasVoice_temperature', settings.temperature);
+  localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
+  localStorage.setItem('atlasVoice_specialInstructions', settings.specialInstructions);
 
   console.log('✅ Settings saved');
+}
+
+// Show knowledge base modal
+function showKnowledgeModal(data) {
+  const modal = document.createElement('div');
+  modal.className = 'knowledge-modal';
+  modal.innerHTML = `
+    <div class="knowledge-modal-content">
+      <div class="knowledge-modal-header">
+        <h3>🧠 Atlas Knowledge Base</h3>
+        <button class="knowledge-modal-close">&times;</button>
+      </div>
+      <div class="knowledge-modal-body">
+        <div class="knowledge-section">
+          <h4>📝 Memory Entries (${data.memory?.length || 0})</h4>
+          <div class="knowledge-list">
+            ${data.memory?.map(m => `
+              <div class="knowledge-item">
+                <div class="knowledge-item-header">
+                  <span class="knowledge-type">${m.memory_type}</span>
+                  <span class="knowledge-score">${m.importance_score}/10</span>
+                </div>
+                <div class="knowledge-content">${m.content}</div>
+                <div class="knowledge-meta">Accessed ${m.access_count} times</div>
+              </div>
+            `).join('') || '<p>No memory entries yet</p>'}
+          </div>
+        </div>
+        
+        <div class="knowledge-section">
+          <h4>🔍 Learned Patterns (${data.patterns?.length || 0})</h4>
+          <div class="knowledge-list">
+            ${data.patterns?.map(p => `
+              <div class="knowledge-item">
+                <div class="knowledge-item-header">
+                  <span class="knowledge-type">${p.pattern_type}</span>
+                  <span class="knowledge-score">${Math.round(p.confidence_score * 100)}%</span>
+                </div>
+                <div class="knowledge-content">${JSON.stringify(p.pattern_data, null, 2)}</div>
+                <div class="knowledge-meta">Seen ${p.frequency} times</div>
+              </div>
+            `).join('') || '<p>No patterns learned yet</p>'}
+          </div>
+        </div>
+        
+        <div class="knowledge-section">
+          <h4>📚 Knowledge Base (${data.knowledge?.length || 0})</h4>
+          <div class="knowledge-list">
+            ${data.knowledge?.map(k => `
+              <div class="knowledge-item">
+                <div class="knowledge-item-header">
+                  <span class="knowledge-type">${k.category}</span>
+                  <span class="knowledge-score">${k.title}</span>
+                </div>
+                <div class="knowledge-content">${k.content}</div>
+                <div class="knowledge-meta">Accessed ${k.access_count} times</div>
+              </div>
+            `).join('') || '<p>No knowledge entries yet</p>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close modal functionality
+  modal.querySelector('.knowledge-modal-close').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  });
 }
 
 // Initialize
 loadSettings();
 
 // Reset UI to show voice orb on startup
-els.voiceOrbWrapper.classList.remove('hidden');
-els.chatContainer.style.display = 'none';
-els.chatContainer.innerHTML = '';
+setTimeout(() => {
+  els.voiceOrbWrapper.classList.remove('hidden');
+  els.chatContainer.style.display = 'none';
+  els.chatContainer.innerHTML = '';
+
+  // Force voice orb to be visible
+  els.voiceOrbWrapper.style.display = 'flex';
+  els.voiceOrbWrapper.style.opacity = '1';
+  els.voiceOrbWrapper.style.visibility = 'visible';
+
+  // Debug: Ensure voice orb is visible
+  console.log('🎯 Voice orb wrapper classes:', els.voiceOrbWrapper.className);
+  console.log('🎯 Voice orb wrapper display:', window.getComputedStyle(els.voiceOrbWrapper).display);
+  console.log('🎯 Voice orb wrapper visibility:', window.getComputedStyle(els.voiceOrbWrapper).visibility);
+}, 100);
 
 setupPressToTalk();
 setupContinuousMode();

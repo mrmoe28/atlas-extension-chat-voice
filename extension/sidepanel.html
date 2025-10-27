@@ -49,6 +49,53 @@
           <p class="mode-description">Enable voice-controlled desktop automation</p>
         </div>
 
+        <div class="setting-item">
+          <label for="temperatureSlider" class="slider-label">
+            <span>Atlas Creativity</span>
+            <span class="slider-value" id="temperatureValue">0.7</span>
+          </label>
+          <div class="slider-container">
+            <input type="range" 
+                   id="temperatureSlider" 
+                   min="0.1" 
+                   max="2.0" 
+                   step="0.1" 
+                   value="0.7" 
+                   class="temperature-slider" />
+            <div class="slider-labels">
+              <span class="slider-label-left">Conservative</span>
+              <span class="slider-label-right">Creative</span>
+            </div>
+          </div>
+          <p class="mode-description">Higher values = more creative responses, lower values = more focused responses</p>
+        </div>
+
+        <div class="setting-item">
+          <label class="mode-toggle">
+            <input type="checkbox" id="memoryEnabled" />
+            <span>Memory & Learning</span>
+          </label>
+          <p class="mode-description">Atlas remembers conversations and learns from your patterns</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="specialInstructions" class="text-label">Special Instructions</label>
+          <textarea id="specialInstructions" 
+                    class="special-instructions-textarea" 
+                    placeholder="Add custom instructions for Atlas (e.g., 'Always be concise', 'Use technical terms', 'Be friendly and casual')"
+                    rows="3"></textarea>
+          <p class="mode-description">Customize how Atlas responds to you</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="knowledgeBase" class="text-label">Knowledge Base</label>
+          <div class="knowledge-base-controls">
+            <button id="viewKnowledgeBtn" class="knowledge-btn">View Knowledge</button>
+            <button id="clearMemoryBtn" class="knowledge-btn secondary">Clear Memory</button>
+          </div>
+          <p class="mode-description">Manage Atlas's memory and learned patterns</p>
+        </div>
+
         <div class="setting-actions">
           <button id="connectBtn" class="connect-btn">Connect</button>
           <button id="interruptBtn" class="interrupt-btn" disabled>Stop</button>

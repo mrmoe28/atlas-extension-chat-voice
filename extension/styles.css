@@ -114,7 +114,7 @@ h1 {
 }
 
 .settings-dropdown.open {
-  max-height: 80vh;
+  max-height: 60vh;
 }
 
 .settings-content {
@@ -257,24 +257,27 @@ h1 {
 }
 
 /* Large Centered Voice Orb */
+.voice-orb-wrapper.hidden {
+  opacity: 0;
+  pointer-events: none;
+  display: none !important;
+}
+
 .voice-orb-wrapper {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 80px;
-  display: flex;
+  display: flex !important;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 24px;
   transition: opacity 0.3s;
   z-index: 1;
-}
-
-.voice-orb-wrapper.hidden {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .voice-orb-large {
@@ -829,4 +832,300 @@ h1 {
 
 .help-footer strong {
   color: var(--text);
+}
+
+/* Temperature Slider Styles */
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.slider-value {
+  background: var(--brand);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 32px;
+  text-align: center;
+}
+
+.slider-container {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.temperature-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.temperature-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--brand);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.temperature-slider::-webkit-slider-thumb:hover {
+  background: var(--brand-hover);
+  transform: scale(1.1);
+}
+
+.temperature-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--brand);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.temperature-slider::-moz-range-thumb:hover {
+  background: var(--brand-hover);
+  transform: scale(1.1);
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.slider-label-left {
+  color: var(--success);
+}
+
+.slider-label-right {
+  color: var(--brand);
+}
+
+/* Knowledge Base Styles */
+.text-label {
+  display: block;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.special-instructions-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 60px;
+  transition: border-color 0.2s;
+}
+
+.special-instructions-textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.special-instructions-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.knowledge-base-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.knowledge-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.knowledge-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--brand);
+}
+
+.knowledge-btn.secondary {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.knowledge-btn.secondary:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--error);
+}
+
+/* Knowledge Modal Styles */
+.knowledge-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.knowledge-modal-content {
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  max-width: 800px;
+  max-height: 80vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.knowledge-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.knowledge-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.knowledge-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.knowledge-modal-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.knowledge-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.knowledge-section {
+  margin-bottom: 24px;
+}
+
+.knowledge-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledge-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s;
+}
+
+.knowledge-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--brand);
+}
+
+.knowledge-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.knowledge-type {
+  background: var(--brand);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.knowledge-score {
+  background: var(--surface);
+  color: var(--text);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.knowledge-content {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.knowledge-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
 }
