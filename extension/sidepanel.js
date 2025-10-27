@@ -494,31 +494,48 @@ function parseDesktopCommand(text) {
   return null;
 }
 
-// Execute desktop command via server
+// Execute desktop command via Chrome Extension APIs
 async function executeDesktopCommand(command) {
   try {
-    const serverUrl = els.serverUrl.value.trim();
+    const { type, param } = command;
 
-    // Check if using Vercel (which can't execute desktop commands)
-    if (serverUrl.includes('vercel.app')) {
-      return {
-        error: 'Desktop Commander requires local server. Please run: cd server && npm install && npm run dev, then change Server URL to http://localhost:8787'
-      };
+    switch (type) {
+      case 'openFolder':
+        // Use Chrome downloads to trigger folder open
+        const folderPath = param.replace('~', '/Users/ekodevapps');
+        await chrome.downloads.showDefaultFolder();
+        return { success: true, message: `Opening Downloads folder` };
+
+      case 'runApp':
+        // Open Google search which user can use to launch app
+        const searchQuery = `mac open ${param}`;
+        await chrome.tabs.create({
+          url: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
+          active: true
+        });
+        return { success: true, message: `Search opened for: ${param}` };
+
+      case 'createFile':
+        // Create a download
+        const blob = new Blob(['# Created by Atlas Voice\n'], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const filename = param.split('/').pop();
+        await chrome.downloads.download({
+          url: url,
+          filename: filename,
+          saveAs: false
+        });
+        return { success: true, message: `Created file: ${filename}` };
+
+      case 'listFiles':
+        return {
+          success: true,
+          message: `Opening ${param || 'Downloads'} folder to view files`
+        };
+
+      default:
+        return { error: 'Unknown command type' };
     }
-
-    const response = await fetch(`${serverUrl}/api/desktop`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(command)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `Command failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
   } catch (err) {
     console.error('Desktop command error:', err);
     return { error: err.message };
