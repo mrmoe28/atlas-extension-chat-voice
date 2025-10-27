@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import fetch from 'node-fetch';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -130,6 +131,72 @@ app.post('/api/desktop', async (req, res) => {
     });
   } catch (e) {
     console.error('Desktop command error:', e);
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+/**
+ * Vision API endpoint
+ * Analyzes screenshots using GPT-4 Vision
+ */
+app.post('/api/vision', async (req, res) => {
+  try {
+    const { image, prompt } = req.body;
+
+    if (!image) {
+      return res.status(400).json({ error: 'Image required' });
+    }
+
+    console.log('Analyzing screenshot with GPT-4 Vision...');
+
+    // Call OpenAI Vision API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${(process.env.OPENAI_API_KEY || '').trim()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: prompt || 'Describe what you see in this screenshot in detail.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: image
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 1000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Vision API error:', response.status, errorText);
+      throw new Error(`Vision API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const description = data.choices[0]?.message?.content || 'Unable to analyze image';
+
+    console.log('Vision analysis complete');
+
+    res.json({
+      success: true,
+      description,
+      model: 'gpt-4o'
+    });
+  } catch (e) {
+    console.error('Vision API error:', e);
     res.status(500).json({ error: String(e.message || e) });
   }
 });

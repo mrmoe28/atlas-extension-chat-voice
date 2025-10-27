@@ -1,10 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Atlas Voice Panel",
-  "version": "0.1.0",
-  "description": "Side panel that wraps ChatGPT Voice via OpenAI Realtime API (WebRTC) with Web Speech fallback.",
-  "permissions": ["storage", "sidePanel", "activeTab"],
-  "host_permissions": ["https://api.openai.com/*", "https://atlas-extension-chat-voice.vercel.app/*"],
+  "version": "0.2.0",
+  "description": "Voice AI assistant with Desktop Commander - screen capture and automation capabilities",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "desktopCapture",
+    "tabCapture",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://atlas-extension-chat-voice.vercel.app/*",
+    "<all_urls>"
+  ],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Atlas Voice Panel" },
   "side_panel": { "default_path": "sidepanel.html" },

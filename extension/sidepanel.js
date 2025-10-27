@@ -13,6 +13,8 @@ const els = {
   interruptBtn: document.getElementById('interruptBtn'),
   continuousMode: document.getElementById('continuousMode'),
   desktopMode: document.getElementById('desktopMode'),
+  visionMode: document.getElementById('visionMode'),
+  captureScreenBtn: document.getElementById('captureScreenBtn'),
   chatContainer: document.getElementById('chatContainer'),
   voiceOrb: document.getElementById('voiceOrb'),
   voiceOrbWrapper: document.getElementById('voiceOrbWrapper'),
@@ -31,8 +33,10 @@ let isListening = false;
 let isSpeaking = false;
 let isContinuousMode = false;
 let isDesktopMode = false;
+let isVisionMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
+let lastScreenshot = null;
 
 // Hamburger menu toggle
 els.menuBtn.addEventListener('click', () => {
@@ -532,6 +536,89 @@ function webSpeechFallbackSetup() {
     speechSynthesis.speak(u);
   });
 }
+
+// Vision Mode Toggle
+els.visionMode.addEventListener('change', () => {
+  isVisionMode = els.visionMode.checked;
+  els.captureScreenBtn.disabled = !isVisionMode;
+
+  if (isVisionMode) {
+    els.orbStatus.textContent = 'Screen Vision enabled - AI can see your desktop';
+  } else {
+    els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
+    lastScreenshot = null;
+  }
+});
+
+// Screen Capture Functionality
+async function captureScreen() {
+  try {
+    els.orbStatus.textContent = 'Capturing screen...';
+
+    // Request screen capture
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        mediaSource: 'screen',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
+    });
+
+    // Create video element to capture frame
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.play();
+
+    // Wait for video to be ready
+    await new Promise(resolve => {
+      video.onloadedmetadata = resolve;
+    });
+
+    // Create canvas and capture frame
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    // Convert to base64
+    const screenshot = canvas.toDataURL('image/jpeg', 0.8);
+    lastScreenshot = screenshot;
+
+    // Stop the stream
+    stream.getTracks().forEach(track => track.stop());
+
+    // Send screenshot to server for AI analysis
+    els.orbStatus.textContent = 'Analyzing screen...';
+    showTypingIndicator();
+
+    const response = await fetch(`${els.serverUrl.value.trim()}/api/vision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: screenshot,
+        prompt: 'Describe what you see on this screen in detail. Identify any applications, windows, or content that might be relevant for desktop automation.'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Vision API failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    removeTypingIndicator();
+
+    addMessage('assistant', `📸 Screen captured! Here's what I see:\n\n${result.description}`);
+    els.orbStatus.textContent = 'Screen captured and analyzed';
+
+  } catch (err) {
+    console.error('Screen capture error:', err);
+    els.orbStatus.textContent = `Error: ${err.message}`;
+    removeTypingIndicator();
+  }
+}
+
+els.captureScreenBtn.addEventListener('click', captureScreen);
 
 // Permission Modal Logic
 async function checkFirstTimeUse() {
