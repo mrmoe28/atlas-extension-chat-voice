@@ -333,27 +333,60 @@ IMPORTANT:
               result = { success: true, message: `Opened ${url}` };
               addMessage('assistant', '✅ Opened page');
             } else if (functionName === 'open_folder') {
-              await chrome.downloads.showDefaultFolder();
-              result = { success: true, message: 'Opened Downloads folder' };
-              addMessage('assistant', '✅ Opened Downloads folder');
+              // Try local server first for better desktop integration
+              const localResult = await executeDesktopCommand({
+                type: 'openFolder',
+                param: '~/Downloads'
+              });
+              if (localResult.success) {
+                result = localResult;
+                addMessage('assistant', '✅ Opened Downloads folder');
+              } else {
+                // Fallback to Chrome API
+                await chrome.downloads.showDefaultFolder();
+                result = { success: true, message: 'Opened Downloads folder' };
+                addMessage('assistant', '✅ Opened Downloads folder');
+              }
             } else if (functionName === 'launch_app') {
-              const appName = args.app_name.replace(/\s/g, '%20');
-              await chrome.tabs.create({
-                url: `file:///Applications/${appName}.app`,
-                active: true
+              // Use local server for reliable app launching
+              const localResult = await executeDesktopCommand({
+                type: 'runApp',
+                param: args.app_name
               });
-              result = { success: true, message: `Launched ${args.app_name}` };
-              addMessage('assistant', `✅ Launched ${args.app_name}`);
+              if (localResult.success) {
+                result = localResult;
+                addMessage('assistant', `✅ Launched ${args.app_name}`);
+              } else {
+                // Fallback to Chrome tabs (won't work well)
+                const appName = args.app_name.replace(/\s/g, '%20');
+                await chrome.tabs.create({
+                  url: `file:///Applications/${appName}.app`,
+                  active: true
+                });
+                result = { success: true, message: `Launched ${args.app_name}` };
+                addMessage('assistant', `✅ Launched ${args.app_name}`);
+              }
             } else if (functionName === 'create_file') {
-              const blob = new Blob([''], { type: 'text/plain' });
-              const url = URL.createObjectURL(blob);
-              await chrome.downloads.download({
-                url: url,
-                filename: args.filename,
-                saveAs: false
+              // Use local server for actual file creation
+              const localResult = await executeDesktopCommand({
+                type: 'createFile',
+                param: `~/Downloads/${args.filename}`
               });
-              result = { success: true, message: `Created ${args.filename}` };
-              addMessage('assistant', `✅ Created ${args.filename}`);
+              if (localResult.success) {
+                result = localResult;
+                addMessage('assistant', `✅ Created ${args.filename}`);
+              } else {
+                // Fallback to Chrome downloads
+                const blob = new Blob([''], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                await chrome.downloads.download({
+                  url: url,
+                  filename: args.filename,
+                  saveAs: false
+                });
+                result = { success: true, message: `Created ${args.filename}` };
+                addMessage('assistant', `✅ Created ${args.filename}`);
+              }
             }
           } catch (error) {
             result = { success: false, error: error.message };
@@ -610,20 +643,37 @@ function parseDesktopCommand(text) {
   return null;
 }
 
-// Execute desktop command via Chrome Extension APIs
+// Execute desktop command via local server (with Chrome API fallback)
 async function executeDesktopCommand(command) {
   try {
     const { type, param } = command;
 
+    // Try local server first (http://localhost:8787/api/desktop)
+    try {
+      console.log('🖥️ Calling local server:', type, param);
+      const response = await fetch('http://localhost:8787/api/desktop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, param })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Local server success:', data);
+        return { success: true, message: data.message || 'Done' };
+      }
+    } catch (localError) {
+      console.log('⚠️ Local server unavailable, using Chrome API fallback');
+    }
+
+    // Fallback to Chrome Extension APIs if local server unavailable
     switch (type) {
       case 'openFolder':
       case 'listFiles':
-        // Open Downloads folder using Chrome API
         await chrome.downloads.showDefaultFolder();
         return { success: true, message: `Done` };
 
       case 'runApp':
-        // Open file:// URL to trigger app launch
         const appName = param.replace(/\s/g, '%20');
         await chrome.tabs.create({
           url: `file:///Applications/${appName}.app`,
@@ -632,7 +682,6 @@ async function executeDesktopCommand(command) {
         return { success: true, message: `Done` };
 
       case 'createFile':
-        // Create a download
         const blob = new Blob([''], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const filename = param.split('/').pop();

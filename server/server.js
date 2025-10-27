@@ -71,18 +71,22 @@ app.post('/api/desktop', async (req, res) => {
 
     switch (type) {
       case 'openFolder':
+        // Expand ~ to home directory
+        const expandedPath = param.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
         command = process.platform === 'darwin'
-          ? `open "${param}"`
+          ? `open "${expandedPath}"`
           : process.platform === 'win32'
-          ? `start "" "${param}"`
-          : `xdg-open "${param}"`;
+          ? `start "" "${expandedPath}"`
+          : `xdg-open "${expandedPath}"`;
         message = `Opened folder: ${param}`;
         break;
 
       case 'createFile':
+        // Expand ~ to home directory
+        const expandedFilePath = param.replace(/^~/, process.env.HOME || process.env.USERPROFILE);
         command = process.platform === 'win32'
-          ? `type nul > "${param}"`
-          : `touch "${param}"`;
+          ? `type nul > "${expandedFilePath}"`
+          : `touch "${expandedFilePath}"`;
         message = `Created file: ${param}`;
         break;
 
