@@ -168,14 +168,22 @@ async function connectRealtime() {
       const instructions = isDesktopMode
         ? `You are Atlas Voice, an AI assistant with desktop automation capabilities. You can help users control their computer through voice commands.
 
-Available desktop commands:
-- "open folder [path]" - Opens a folder or directory
-- "create file [path]" - Creates a new file
-- "find file [name]" - Searches for files by name
-- "launch [app]" - Opens an application
-- "list files in [directory]" - Shows contents of a directory
+When users ask you to perform desktop tasks, respond naturally AND include a special command tag:
 
-When users ask you to perform these actions, acknowledge and confirm what you're doing. Be helpful and conversational while executing commands.`
+For opening folders: Say your response and include [CMD:OPEN_FOLDER:path/to/folder]
+For creating files: Say your response and include [CMD:CREATE_FILE:path/to/file.txt]
+For finding files: Say your response and include [CMD:FIND_FILE:filename]
+For launching apps: Say your response and include [CMD:LAUNCH_APP:AppName]
+For listing files: Say your response and include [CMD:LIST_FILES:directory/path]
+
+Example:
+User: "Can you open my Downloads folder?"
+You: "Sure! I'll open your Downloads folder for you. [CMD:OPEN_FOLDER:~/Downloads]"
+
+User: "Launch Chrome"
+You: "Opening Google Chrome now. [CMD:LAUNCH_APP:Google Chrome]"
+
+Be conversational and friendly while executing these commands.`
         : `You are Atlas Voice, a helpful AI assistant. Have natural conversations with users.`;
 
       // Send session update with instructions
@@ -233,7 +241,31 @@ When users ask you to perform these actions, acknowledge and confirm what you're
         if (msg.type === 'response.text.done' || msg.type === 'response.done') {
           if (currentAIMessage) {
             removeTypingIndicator();
-            addMessage('assistant', currentAIMessage);
+
+            // Parse for desktop commands if in desktop mode
+            let displayMessage = currentAIMessage;
+            if (isDesktopMode) {
+              const cmdMatch = currentAIMessage.match(/\[CMD:([A-Z_]+):(.+?)\]/);
+              if (cmdMatch) {
+                const [fullMatch, cmdType, cmdParam] = cmdMatch;
+                displayMessage = currentAIMessage.replace(fullMatch, '').trim();
+
+                // Execute the command
+                const command = mapCommandType(cmdType, cmdParam);
+                if (command) {
+                  console.log('Executing desktop command:', command);
+                  executeDesktopCommand(command).then(result => {
+                    if (result.error) {
+                      addMessage('assistant', `❌ Error: ${result.error}`);
+                    } else {
+                      addMessage('assistant', `✅ ${result.message || 'Command executed'}`);
+                    }
+                  });
+                }
+              }
+            }
+
+            addMessage('assistant', displayMessage);
             currentAIMessage = '';
           }
         }
@@ -391,14 +423,22 @@ els.desktopMode.addEventListener('change', () => {
     const instructions = isDesktopMode
       ? `You are Atlas Voice, an AI assistant with desktop automation capabilities. You can help users control their computer through voice commands.
 
-Available desktop commands:
-- "open folder [path]" - Opens a folder or directory
-- "create file [path]" - Creates a new file
-- "find file [name]" - Searches for files by name
-- "launch [app]" - Opens an application
-- "list files in [directory]" - Shows contents of a directory
+When users ask you to perform desktop tasks, respond naturally AND include a special command tag:
 
-When users ask you to perform these actions, acknowledge and confirm what you're doing. Be helpful and conversational while executing commands.`
+For opening folders: Say your response and include [CMD:OPEN_FOLDER:path/to/folder]
+For creating files: Say your response and include [CMD:CREATE_FILE:path/to/file.txt]
+For finding files: Say your response and include [CMD:FIND_FILE:filename]
+For launching apps: Say your response and include [CMD:LAUNCH_APP:AppName]
+For listing files: Say your response and include [CMD:LIST_FILES:directory/path]
+
+Example:
+User: "Can you open my Downloads folder?"
+You: "Sure! I'll open your Downloads folder for you. [CMD:OPEN_FOLDER:~/Downloads]"
+
+User: "Launch Chrome"
+You: "Opening Google Chrome now. [CMD:LAUNCH_APP:Google Chrome]"
+
+Be conversational and friendly while executing these commands.`
       : `You are Atlas Voice, a helpful AI assistant. Have natural conversations with users.`;
 
     dataChannel.send(JSON.stringify({
@@ -412,7 +452,20 @@ When users ask you to perform these actions, acknowledge and confirm what you're
   }
 });
 
-// Desktop command parser
+// Map command type from AI response to API format
+function mapCommandType(cmdType, param) {
+  const commandMap = {
+    'OPEN_FOLDER': { type: 'openFolder', param },
+    'CREATE_FILE': { type: 'createFile', param },
+    'FIND_FILE': { type: 'findFile', param },
+    'LAUNCH_APP': { type: 'runApp', param },
+    'LIST_FILES': { type: 'listFiles', param }
+  };
+
+  return commandMap[cmdType] || null;
+}
+
+// Legacy: Desktop command parser (keeping for fallback)
 function parseDesktopCommand(text) {
   const lowerText = text.toLowerCase().trim();
 
@@ -540,12 +593,14 @@ function webSpeechFallbackSetup() {
 // Vision Mode Toggle
 els.visionMode.addEventListener('change', () => {
   isVisionMode = els.visionMode.checked;
-  els.captureScreenBtn.disabled = !isVisionMode;
+  const captureContainer = document.getElementById('captureScreenContainer');
 
   if (isVisionMode) {
     els.orbStatus.textContent = 'Screen Vision enabled - AI can see your desktop';
+    captureContainer.style.display = 'block';
   } else {
     els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
+    captureContainer.style.display = 'none';
     lastScreenshot = null;
   }
 });

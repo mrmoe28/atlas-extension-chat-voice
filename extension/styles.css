@@ -108,13 +108,13 @@ h1 {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   max-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
   transition: max-height 0.3s ease-out;
   z-index: 99;
 }
 
 .settings-dropdown.open {
-  max-height: 300px;
+  max-height: 500px;
 }
 
 .settings-content {
