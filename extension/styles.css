@@ -7,7 +7,7 @@
   --brand: #4aa3ff;
   --brand-hover: #3a93ef;
   --user-bubble: #2d5bf5;
-  --ai-bubble: #252629;
+  --ai-bubble: #7c3aed; /* Purple for AI */
   --border: #2a2d38;
   --success: #10b981;
   --error: #ef4444;
@@ -476,7 +476,7 @@ h1 {
 
 .message.assistant .message-content {
   background: var(--ai-bubble);
-  color: var(--text);
+  color: white;
   border-bottom-left-radius: 4px;
 }
 

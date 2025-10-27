@@ -918,10 +918,13 @@ els.skipPermissionBtn.addEventListener('click', () => {
 
 // Load saved settings from localStorage
 function loadSettings() {
+  console.log('💾 Loading saved settings...');
   const savedServerUrl = localStorage.getItem('atlasVoice_serverUrl');
   const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
   const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
   const savedVisionMode = localStorage.getItem('atlasVoice_visionMode');
+
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -931,26 +934,40 @@ function loadSettings() {
     els.desktopMode.checked = true;
     isDesktopMode = true;
     els.voiceOrb.classList.add('desktop-mode');
+    console.log('✅ Desktop mode restored');
   }
 
   if (savedContinuousMode === 'true') {
     els.continuousMode.checked = true;
     isContinuousMode = true;
+    console.log('✅ Continuous mode restored');
   }
 
   if (savedVisionMode === 'true') {
     els.visionMode.checked = true;
     isVisionMode = true;
     document.getElementById('captureScreenContainer').style.display = 'block';
+    console.log('✅ Vision mode restored');
   }
 }
 
 // Save settings to localStorage
 function saveSettings() {
-  localStorage.setItem('atlasVoice_serverUrl', els.serverUrl.value);
-  localStorage.setItem('atlasVoice_desktopMode', els.desktopMode.checked);
-  localStorage.setItem('atlasVoice_continuousMode', els.continuousMode.checked);
-  localStorage.setItem('atlasVoice_visionMode', els.visionMode.checked);
+  const settings = {
+    serverUrl: els.serverUrl.value,
+    desktopMode: els.desktopMode.checked,
+    continuousMode: els.continuousMode.checked,
+    visionMode: els.visionMode.checked
+  };
+
+  console.log('💾 Saving settings:', settings);
+
+  localStorage.setItem('atlasVoice_serverUrl', settings.serverUrl);
+  localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
+  localStorage.setItem('atlasVoice_continuousMode', String(settings.continuousMode));
+  localStorage.setItem('atlasVoice_visionMode', String(settings.visionMode));
+
+  console.log('✅ Settings saved');
 }
 
 // Initialize
