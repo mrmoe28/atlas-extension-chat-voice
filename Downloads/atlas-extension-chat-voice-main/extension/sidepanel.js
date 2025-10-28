@@ -309,9 +309,31 @@ window.addEventListener('resize', () => {
 });
 
 async function getEphemeralToken(serverBase) {
-  const r = await fetch(`${serverBase}/api/ephemeral`);
-  if (!r.ok) throw new Error('Failed to get ephemeral key');
-  return r.json();
+  try {
+    console.log('🔑 Requesting ephemeral token from:', `${serverBase}/api/ephemeral`);
+
+    const r = await fetch(`${serverBase}/api/ephemeral`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!r.ok) {
+      const errorText = await r.text();
+      console.error('❌ Ephemeral token request failed:', r.status, errorText);
+      throw new Error(`Server responded with ${r.status}: ${errorText || 'Failed to get ephemeral key'}`);
+    }
+
+    const data = await r.json();
+    console.log('✅ Ephemeral token received');
+    return data;
+  } catch (err) {
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      throw new Error(`Cannot connect to server. Check: 1) Server URL is correct 2) Server is running 3) Internet connection`);
+    }
+    throw err;
+  }
 }
 
 async function ensureMic() {
@@ -512,18 +534,24 @@ function removeTypingIndicator() {
 
 async function connectRealtime() {
   try {
-    els.orbStatus.textContent = 'Connecting...';
-    
+    els.orbStatus.textContent = 'Connecting to server...';
+
+    // Get ephemeral token first (before requesting mic)
+    const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
+
+    els.orbStatus.textContent = 'Requesting microphone access...';
+
     // Use MicPermission for microphone access
     let localStream;
     try {
       localStream = await MicPermission.ensureMic();
     } catch (e) {
       console.error('WebRTC connection error (mic):', e);
+      els.orbStatus.textContent = 'Microphone access denied';
       return;
     }
-    
-    const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
+
+    els.orbStatus.textContent = 'Establishing connection...';
 
     pc = new RTCPeerConnection();
     for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
@@ -1216,9 +1244,24 @@ IMPORTANT:
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
   } catch (err) {
-    console.error(err);
-    els.orbStatus.textContent = `Error: ${err.message}`;
+    console.error('❌ Connection error:', err);
+
+    // Show user-friendly error message
+    let errorMsg = err.message;
+    if (errorMsg.length > 100) {
+      errorMsg = errorMsg.substring(0, 100) + '...';
+    }
+
+    els.orbStatus.textContent = `Error: ${errorMsg}`;
+    els.statusDot.classList.remove('connected');
     connected = false;
+
+    // Show detailed error in console
+    console.error('Full error details:', {
+      message: err.message,
+      stack: err.stack,
+      serverUrl: els.serverUrl.value.trim()
+    });
   }
 }
 
