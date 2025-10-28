@@ -1128,6 +1128,11 @@ function disableMic() {
 
 // Press-to-Talk Mode
 function setupPressToTalk() {
+  // Remove any existing event listeners by cloning the button
+  const newVoiceBtn = els.voiceBtn.cloneNode(true);
+  els.voiceBtn.parentNode.replaceChild(newVoiceBtn, els.voiceBtn);
+  els.voiceBtn = newVoiceBtn;
+  
   let isHolding = false;
   let clickTimeout = null;
 
@@ -1178,6 +1183,11 @@ function setupPressToTalk() {
 
 // Continuous Mode (Toggle)
 function setupContinuousMode() {
+  // Remove any existing event listeners by cloning the button
+  const newVoiceBtn = els.voiceBtn.cloneNode(true);
+  els.voiceBtn.parentNode.replaceChild(newVoiceBtn, els.voiceBtn);
+  els.voiceBtn = newVoiceBtn;
+  
   els.voiceBtn.addEventListener('click', (e) => {
     if (!connected || !isContinuousMode) return;
 
