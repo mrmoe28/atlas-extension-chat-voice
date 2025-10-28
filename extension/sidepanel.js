@@ -413,18 +413,30 @@ function removeTypingIndicator() {
 
 async function connectRealtime() {
   try {
+    console.log('🚀 Starting connection process...');
+    console.log('📡 Server URL:', els.serverUrl.value.trim());
+    
+    if (!els.serverUrl.value.trim()) {
+      throw new Error('Server URL is required. Please enter a server URL in settings.');
+    }
+    
     els.orbStatus.textContent = 'Connecting...';
     
     // Use MicPermission for microphone access
     let localStream;
     try {
+      console.log('🎤 Requesting microphone access...');
       localStream = await MicPermission.ensureMic();
+      console.log('✅ Microphone access granted');
     } catch (e) {
-      console.error('WebRTC connection error (mic):', e);
+      console.error('❌ WebRTC connection error (mic):', e);
+      els.orbStatus.textContent = `Microphone error: ${e.message}`;
       return;
     }
     
+    console.log('🔑 Getting ephemeral token...');
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
+    console.log('✅ Ephemeral token received');
 
     pc = new RTCPeerConnection();
     for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
@@ -1800,15 +1812,27 @@ async function executeBrowserCommand(action, params) {
 }
 
 // Connection button
-els.connectBtn.addEventListener('click', async () => {
-  if (!connected) {
-    await connectRealtime();
-    // Close settings modal after connecting
-    closeSettingsModal();
-  } else {
-    teardown();
-  }
-});
+if (els.connectBtn) {
+  els.connectBtn.addEventListener('click', async () => {
+    console.log('🔗 Connect button clicked, connected:', connected);
+    try {
+      if (!connected) {
+        console.log('🚀 Starting connection...');
+        await connectRealtime();
+        // Close settings modal after connecting
+        closeSettingsModal();
+      } else {
+        console.log('🔌 Disconnecting...');
+        teardown();
+      }
+    } catch (error) {
+      console.error('❌ Connection error:', error);
+      els.orbStatus.textContent = `Connection failed: ${error.message}`;
+    }
+  });
+} else {
+  console.error('❌ Connect button not found!');
+}
 
 // Interrupt button
 els.interruptBtn.addEventListener('click', () => {
