@@ -605,8 +605,9 @@ h1 {
 }
 
 .message.assistant .message-avatar {
-  background: var(--brand);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .message-content {
@@ -624,9 +625,11 @@ h1 {
 }
 
 .message.assistant .message-content {
-  background: var(--ai-bubble);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border-bottom-left-radius: 4px;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.3);
 }
 
 /* Typing Indicator */

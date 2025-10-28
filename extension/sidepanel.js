@@ -919,6 +919,7 @@ function disableMic() {
 
 // Press-to-Talk Mode
 function setupPressToTalk() {
+  // Hold to talk functionality
   els.voiceBtn.addEventListener('mousedown', () => {
     if (!connected || isContinuousMode) return;
     enableMic();
@@ -929,6 +930,22 @@ function setupPressToTalk() {
       if (!connected || isContinuousMode) return;
       disableMic();
     });
+  });
+
+  // Click to toggle listening (pause/resume)
+  els.voiceBtn.addEventListener('click', (e) => {
+    if (!connected || isContinuousMode) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isListening) {
+      disableMic();
+      els.voiceStatus.textContent = 'Paused - Hold to talk';
+    } else {
+      enableMic();
+      els.voiceStatus.textContent = 'Listening...';
+    }
   });
 }
 
