@@ -585,11 +585,12 @@ async function connectRealtime() {
 YOU CAN SEE ATTACHED FILES! When the user uploads a file:
 - The file content is ALREADY IN YOUR MESSAGES
 - You have DIRECT ACCESS to images, PDFs, and documents
-- PDFs appear as "📄 Content from [filename]:" followed by extracted text
-- Images appear as "[Analyzing image: filename]" followed by base64 data
-- Text files appear with full content in the message
+- **IMAGES**: Sent as visual input - you can SEE them directly! Analyze what you see.
+- **PDFs**: Text content extracted and sent as "📄 Content from [filename]:"
+- **Text files**: Full content sent directly in the message
 - NEVER say "I can't see files" or "Please share the file"
 - ALWAYS analyze the content that's already in front of you
+- For images: Describe what you see, read text, identify objects, analyze layouts
 
 Examples of GOOD vs BAD behavior:
 ❌ BAD: "I'm unable to directly view files"
@@ -736,11 +737,12 @@ Be helpful, concise, and always confirm actions taken.`
 YOU CAN SEE ATTACHED FILES! When the user uploads a file:
 - The file content is ALREADY IN YOUR MESSAGES
 - You have DIRECT ACCESS to images, PDFs, and documents
-- PDFs appear as "📄 Content from [filename]:" followed by extracted text
-- Images appear as "[Analyzing image: filename]" followed by base64 data
-- Text files appear with full content in the message
+- **IMAGES**: Sent as visual input - you can SEE them directly! Analyze what you see.
+- **PDFs**: Text content extracted and sent as "📄 Content from [filename]:"
+- **Text files**: Full content sent directly in the message
 - NEVER say "I can't see files" or "Please share the file"
 - ALWAYS analyze the content that's already in front of you
+- For images: Describe what you see, read text, identify objects, analyze layouts
 
 Examples of GOOD vs BAD behavior:
 ❌ BAD: "I'm unable to directly view files"
@@ -2790,11 +2792,10 @@ async function sendTextMessage() {
     // Process attached files
     for (const file of attachedFiles) {
       if (file.type.startsWith('image/')) {
-        // For images, send as base64 with vision
-        const base64Data = file.data.split(',')[1]; // Remove data:image/...;base64, prefix
+        // For images, use input_image type with base64 data URL
         contentItems.push({
-          type: 'input_text',
-          text: `[Analyzing image: ${file.name}]\nImage data (base64): ${file.data}`
+          type: 'input_image',
+          image_url: file.data  // data:image/png;base64,... format
         });
       } else if (file.type === 'application/pdf') {
         // For PDFs, extract text and send
