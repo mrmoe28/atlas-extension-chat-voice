@@ -69,11 +69,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'extractData':
         handleExtractData(request, sendResponse);
         break;
+<<<<<<< HEAD
       case 'debugElements':
         handleDebugElements(request, sendResponse);
         break;
       default:
         sendResponse({ error: 'Unknown action' });
+=======
+      case 'waitForElement':
+        handleWaitForElement(request, sendResponse);
+        break;
+      case 'batchClick':
+        handleBatchClick(request, sendResponse);
+        break;
+      case 'smartFillForm':
+        handleSmartFillForm(request, sendResponse);
+        break;
+      case 'highlightElements':
+        handleHighlightElements(request, sendResponse);
+        break;
+      case 'getElementInfo':
+        handleGetElementInfo(request, sendResponse);
+        break;
+      case 'uploadFile':
+        handleUploadFile(request, sendResponse);
+        break;
+      case 'enhancedDragDrop':
+        handleEnhancedDragDrop(request, sendResponse);
+        break;
+      case 'simulateFileUpload':
+        handleSimulateFileUpload(request, sendResponse);
+        break;
+>>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
     }
   } catch (error) {
     console.error('Content script error:', error);
@@ -83,16 +110,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
+<<<<<<< HEAD
 // Click an element by selector
 function handleClickElement(request, sendResponse) {
   try {
     const { selector, text } = request;
+=======
+// Enhanced click element with advanced detection and visual feedback
+function handleClickElement(request, sendResponse) {
+  try {
+    const { selector, text, element_type, wait_for_visible = true, highlight = true } = request;
+>>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
     let element;
     
     if (selector) {
       element = document.querySelector(selector);
     } else if (text) {
       // Find element by text content with smart matching
+<<<<<<< HEAD
       element = findElementByTextSmart(text);
     }
     
@@ -104,6 +139,62 @@ function handleClickElement(request, sendResponse) {
       }, 500);
     } else {
       sendResponse({ error: `Element not found: ${selector || text}` });
+=======
+      element = findElementByTextSmart(text, element_type);
+    }
+    
+    if (element) {
+      // Check if element is visible and interactable
+      if (wait_for_visible && !isElementInteractable(element)) {
+        sendResponse({ error: `Element found but not interactable: ${selector || text}` });
+        return;
+      }
+      
+      // Highlight element before clicking (for user feedback)
+      if (highlight) {
+        highlightElement(element);
+      }
+      
+      // Scroll element into view
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Wait for scroll to complete, then click
+      setTimeout(() => {
+        try {
+          // Try multiple click methods for better compatibility
+          if (element.click) {
+            element.click();
+          } else {
+            // Fallback: dispatch click event
+            const clickEvent = new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            });
+            element.dispatchEvent(clickEvent);
+          }
+          
+          sendResponse({ 
+            success: true, 
+            message: `Clicked element: ${selector || text}`,
+            element_info: {
+              tagName: element.tagName,
+              text: element.textContent?.trim().substring(0, 50),
+              position: element.getBoundingClientRect()
+            }
+          });
+        } catch (clickError) {
+          sendResponse({ error: `Click failed: ${clickError.message}` });
+        }
+      }, 500);
+    } else {
+      // Enhanced error reporting with suggestions
+      const suggestions = generateClickSuggestions(text || selector);
+      sendResponse({ 
+        error: `Element not found: ${selector || text}`,
+        suggestions: suggestions
+      });
+>>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
     }
   } catch (error) {
     sendResponse({ error: error.message });
@@ -266,8 +357,82 @@ function handleMouseClick(request, sendResponse) {
   }
 }
 
+<<<<<<< HEAD
 // Helper function to find element by text with smart matching
 function findElementByTextSmart(text) {
+=======
+// Helper function to check if element is interactable
+function isElementInteractable(element) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  
+  // Check if element is visible
+  if (rect.width === 0 || rect.height === 0) return false;
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  if (style.opacity === '0') return false;
+  
+  // Check if element is enabled
+  if (element.disabled) return false;
+  
+  // Check if element is in viewport
+  if (rect.top < 0 || rect.left < 0 || 
+      rect.bottom > window.innerHeight || 
+      rect.right > window.innerWidth) return false;
+  
+  return true;
+}
+
+// Helper function to generate click suggestions when element not found
+function generateClickSuggestions(searchText) {
+  const suggestions = [];
+  const lowerText = searchText.toLowerCase();
+  
+  // Find similar elements
+  const allElements = document.querySelectorAll('button, a, input[type="submit"], input[type="button"], [role="button"]');
+  const similarElements = [];
+  
+  for (const element of allElements) {
+    const text = element.textContent?.toLowerCase() || '';
+    const attributes = [
+      element.getAttribute('title'),
+      element.getAttribute('aria-label'),
+      element.getAttribute('placeholder'),
+      element.getAttribute('value')
+    ].filter(Boolean).map(attr => attr.toLowerCase());
+    
+    if (text.includes(lowerText) || attributes.some(attr => attr.includes(lowerText))) {
+      similarElements.push({
+        text: element.textContent?.trim().substring(0, 30),
+        tagName: element.tagName,
+        id: element.id,
+        className: element.className
+      });
+    }
+  }
+  
+  if (similarElements.length > 0) {
+    suggestions.push('Similar elements found:', ...similarElements.slice(0, 5));
+  }
+  
+  // Suggest common selectors
+  const commonSelectors = [
+    'button',
+    'a',
+    'input[type="submit"]',
+    'input[type="button"]',
+    '[role="button"]',
+    '.btn',
+    '.button'
+  ];
+  
+  suggestions.push('Try these selectors:', ...commonSelectors);
+  
+  return suggestions;
+}
+
+// Helper function to find element by text with smart matching
+function findElementByTextSmart(text, elementType = null) {
+>>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
   const searchText = text.toLowerCase().trim();
   const elements = document.querySelectorAll('*');
   
@@ -817,6 +982,604 @@ function handleExtractData(request, sendResponse) {
   }
 }
 
+<<<<<<< HEAD
+=======
+// Wait for element to appear (useful for dynamic content)
+function handleWaitForElement(request, sendResponse) {
+  try {
+    const { selector, text, timeout = 10000, interval = 500 } = request;
+    const startTime = Date.now();
+    
+    function checkForElement() {
+      let element = null;
+      
+      if (selector) {
+        element = document.querySelector(selector);
+      } else if (text) {
+        element = findElementByTextSmart(text);
+      }
+      
+      if (element && isElementInteractable(element)) {
+        sendResponse({ 
+          success: true, 
+          message: `Element found after ${Date.now() - startTime}ms`,
+          element_info: {
+            tagName: element.tagName,
+            text: element.textContent?.trim().substring(0, 50),
+            position: element.getBoundingClientRect()
+          }
+        });
+        return;
+      }
+      
+      if (Date.now() - startTime > timeout) {
+        sendResponse({ error: `Element not found within ${timeout}ms timeout` });
+        return;
+      }
+      
+      setTimeout(checkForElement, interval);
+    }
+    
+    checkForElement();
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Batch click multiple elements
+function handleBatchClick(request, sendResponse) {
+  try {
+    const { elements, delay = 1000 } = request;
+    let clickedCount = 0;
+    let errors = [];
+    
+    async function clickNext(index) {
+      if (index >= elements.length) {
+        sendResponse({ 
+          success: true, 
+          message: `Batch clicked ${clickedCount} elements`,
+          clickedCount,
+          errors: errors.length > 0 ? errors : undefined
+        });
+        return;
+      }
+      
+      const elementData = elements[index];
+      try {
+        let element = null;
+        
+        if (elementData.selector) {
+          element = document.querySelector(elementData.selector);
+        } else if (elementData.text) {
+          element = findElementByTextSmart(elementData.text, elementData.element_type);
+        }
+        
+        if (element && isElementInteractable(element)) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          setTimeout(() => {
+            element.click();
+            clickedCount++;
+            
+            // Wait before next click
+            setTimeout(() => clickNext(index + 1), delay);
+          }, 500);
+        } else {
+          errors.push(`Element ${index + 1} not found or not interactable`);
+          setTimeout(() => clickNext(index + 1), delay);
+        }
+      } catch (error) {
+        errors.push(`Element ${index + 1} error: ${error.message}`);
+        setTimeout(() => clickNext(index + 1), delay);
+      }
+    }
+    
+    clickNext(0);
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Smart form filling with better field detection
+function handleSmartFillForm(request, sendResponse) {
+  try {
+    const { fields, form_selector } = request;
+    let filledCount = 0;
+    let errors = [];
+    
+    // Find form container
+    let formContainer = document;
+    if (form_selector) {
+      formContainer = document.querySelector(form_selector);
+      if (!formContainer) {
+        sendResponse({ error: `Form container not found: ${form_selector}` });
+        return;
+      }
+    }
+    
+    for (const [fieldName, value] of Object.entries(fields)) {
+      try {
+        // Enhanced field detection with multiple strategies
+        const fieldSelectors = [
+          // Direct selectors
+          `input[name="${fieldName}"]`,
+          `input[id="${fieldName}"]`,
+          `textarea[name="${fieldName}"]`,
+          `textarea[id="${fieldName}"]`,
+          `select[name="${fieldName}"]`,
+          `select[id="${fieldName}"]`,
+          
+          // Placeholder-based
+          `input[placeholder*="${fieldName}"]`,
+          `textarea[placeholder*="${fieldName}"]`,
+          
+          // Label-based
+          `input[id="${fieldName.toLowerCase()}"]`,
+          `textarea[id="${fieldName.toLowerCase()}"]`,
+          
+          // Type-based for common fields
+          fieldName.toLowerCase().includes('email') ? 'input[type="email"]' : null,
+          fieldName.toLowerCase().includes('password') ? 'input[type="password"]' : null,
+          fieldName.toLowerCase().includes('phone') ? 'input[type="tel"]' : null,
+          fieldName.toLowerCase().includes('name') ? 'input[type="text"]' : null,
+          
+          // Data attributes
+          `input[data-field="${fieldName}"]`,
+          `input[data-name="${fieldName}"]`
+        ].filter(Boolean);
+        
+        let element = null;
+        for (const selector of fieldSelectors) {
+          element = formContainer.querySelector(selector);
+          if (element && !element.disabled && isElementInteractable(element)) {
+            break;
+          }
+        }
+        
+        if (element) {
+          element.focus();
+          element.value = value;
+          
+          // Trigger all relevant events
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          element.dispatchEvent(new Event('blur', { bubbles: true }));
+          
+          filledCount++;
+        } else {
+          errors.push(`Field "${fieldName}" not found`);
+        }
+      } catch (error) {
+        errors.push(`Field "${fieldName}" error: ${error.message}`);
+      }
+    }
+    
+    sendResponse({ 
+      success: true, 
+      message: `Smart filled ${filledCount} form fields`,
+      filledCount,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Highlight multiple elements for debugging
+function handleHighlightElements(request, sendResponse) {
+  try {
+    const { selectors, text_queries, duration = 3000, color = 'red' } = request;
+    const highlightedElements = [];
+    
+    // Highlight by selectors
+    if (selectors) {
+      for (const selector of selectors) {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(element => {
+          highlightElementWithColor(element, color, duration);
+          highlightedElements.push({
+            selector,
+            tagName: element.tagName,
+            text: element.textContent?.trim().substring(0, 30)
+          });
+        });
+      }
+    }
+    
+    // Highlight by text queries
+    if (text_queries) {
+      for (const textQuery of text_queries) {
+        const element = findElementByTextSmart(textQuery);
+        if (element) {
+          highlightElementWithColor(element, color, duration);
+          highlightedElements.push({
+            textQuery,
+            tagName: element.tagName,
+            text: element.textContent?.trim().substring(0, 30)
+          });
+        }
+      }
+    }
+    
+    sendResponse({ 
+      success: true, 
+      message: `Highlighted ${highlightedElements.length} elements`,
+      highlightedElements
+    });
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Get detailed information about an element
+function handleGetElementInfo(request, sendResponse) {
+  try {
+    const { selector, text } = request;
+    let element = null;
+    
+    if (selector) {
+      element = document.querySelector(selector);
+    } else if (text) {
+      element = findElementByTextSmart(text);
+    }
+    
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      
+      const info = {
+        // Basic info
+        tagName: element.tagName,
+        id: element.id,
+        className: element.className,
+        textContent: element.textContent?.trim().substring(0, 100),
+        
+        // Position and size
+        position: {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height
+        },
+        
+        // Visibility
+        visible: rect.width > 0 && rect.height > 0,
+        display: style.display,
+        visibility: style.visibility,
+        opacity: style.opacity,
+        
+        // Interactability
+        disabled: element.disabled,
+        interactable: isElementInteractable(element),
+        
+        // Attributes
+        attributes: Array.from(element.attributes).reduce((acc, attr) => {
+          acc[attr.name] = attr.value;
+          return acc;
+        }, {}),
+        
+        // Form-specific info
+        formInfo: element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' ? {
+          type: element.type,
+          name: element.name,
+          placeholder: element.placeholder,
+          value: element.value,
+          required: element.required
+        } : null
+      };
+      
+      sendResponse({ success: true, data: info });
+    } else {
+      sendResponse({ error: `Element not found: ${selector || text}` });
+    }
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Helper function to highlight element with custom color and duration
+function highlightElementWithColor(element, color, duration) {
+  const originalStyle = element.style.cssText;
+  element.style.cssText = `border: 3px solid ${color} !important; background-color: rgba(255, 255, 0, 0.3) !important; box-shadow: 0 0 10px ${color} !important;`;
+  
+  setTimeout(() => {
+    element.style.cssText = originalStyle;
+  }, duration);
+}
+
+// Enhanced drag and drop with visual feedback and file support
+function handleEnhancedDragDrop(request, sendResponse) {
+  try {
+    const { source, target, files, duration = 1000, visual_feedback = true } = request;
+    const sourceElement = findElementByTextSmart(source);
+    const targetElement = findElementByTextSmart(target);
+    
+    if (!sourceElement || !targetElement) {
+      sendResponse({ error: `Elements not found: ${source} or ${target}` });
+      return;
+    }
+    
+    // Visual feedback: highlight elements
+    if (visual_feedback) {
+      highlightElementWithColor(sourceElement, 'blue', duration);
+      highlightElementWithColor(targetElement, 'green', duration);
+    }
+    
+    // Scroll elements into view
+    sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+    
+    // Simulate enhanced drag and drop sequence
+    setTimeout(() => {
+      try {
+        // Create comprehensive drag events
+        const dragStartEvent = new DragEvent('dragstart', {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: createDataTransfer(files)
+        });
+        
+        sourceElement.dispatchEvent(dragStartEvent);
+        
+        // Simulate drag over target
+        setTimeout(() => {
+          const dragOverEvent = new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: createDataTransfer(files)
+          });
+          targetElement.dispatchEvent(dragOverEvent);
+          
+          // Drop event
+          setTimeout(() => {
+            const dropEvent = new DragEvent('drop', {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: createDataTransfer(files)
+            });
+            targetElement.dispatchEvent(dropEvent);
+            
+            // Drag end event
+            setTimeout(() => {
+              const dragEndEvent = new DragEvent('dragend', {
+                bubbles: true,
+                cancelable: true
+              });
+              sourceElement.dispatchEvent(dragEndEvent);
+              
+              sendResponse({ 
+                success: true, 
+                message: `Enhanced drag and drop: ${source} → ${target}`,
+                files_transferred: files ? files.length : 0
+              });
+            }, 100);
+          }, 200);
+        }, 300);
+        
+      } catch (error) {
+        sendResponse({ error: `Drag and drop failed: ${error.message}` });
+      }
+    }, 500);
+    
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// File upload functionality
+function handleUploadFile(request, sendResponse) {
+  try {
+    const { selector, files, file_data, file_names } = request;
+    let targetElement = null;
+    
+    // Find file input element
+    if (selector) {
+      targetElement = document.querySelector(selector);
+    } else {
+      // Try to find file input automatically
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      if (fileInputs.length > 0) {
+        targetElement = fileInputs[0]; // Use first file input found
+      }
+    }
+    
+    if (!targetElement) {
+      sendResponse({ error: 'File input element not found' });
+      return;
+    }
+    
+    // Create File objects if file_data is provided
+    if (file_data && file_names) {
+      const fileObjects = file_data.map((data, index) => {
+        const fileName = file_names[index] || `file_${index + 1}.txt`;
+        const mimeType = getMimeTypeFromFileName(fileName);
+        
+        // Convert base64 to blob if needed
+        let blob;
+        if (data.startsWith('data:')) {
+          // Data URL format
+          const response = fetch(data);
+          blob = response.then(r => r.blob());
+        } else if (data.startsWith('data:application/')) {
+          // Base64 encoded data
+          const base64Data = data.split(',')[1];
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          blob = new Blob([bytes], { type: mimeType });
+        } else {
+          // Plain text data
+          blob = new Blob([data], { type: mimeType });
+        }
+        
+        return new File([blob], fileName, { type: mimeType });
+      });
+      
+      // Set files on input element
+      const dataTransfer = new DataTransfer();
+      fileObjects.forEach(file => dataTransfer.items.add(file));
+      targetElement.files = dataTransfer.files;
+      
+      // Trigger change event
+      targetElement.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      sendResponse({ 
+        success: true, 
+        message: `Uploaded ${fileObjects.length} files to ${selector || 'file input'}`,
+        files_uploaded: fileObjects.length,
+        file_names: file_names
+      });
+    } else {
+      sendResponse({ error: 'No file data provided' });
+    }
+    
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Simulate file upload with drag and drop
+function handleSimulateFileUpload(request, sendResponse) {
+  try {
+    const { target_selector, files, file_names, file_data } = request;
+    let targetElement = null;
+    
+    // Find drop target
+    if (target_selector) {
+      targetElement = document.querySelector(target_selector);
+    } else {
+      // Look for common drop zones
+      const dropZones = document.querySelectorAll('[class*="drop"], [class*="upload"], [class*="drag"]');
+      if (dropZones.length > 0) {
+        targetElement = dropZones[0];
+      }
+    }
+    
+    if (!targetElement) {
+      sendResponse({ error: 'Drop target not found' });
+      return;
+    }
+    
+    // Create file objects
+    const fileObjects = [];
+    if (file_data && file_names) {
+      fileObjects.push(...file_data.map((data, index) => {
+        const fileName = file_names[index] || `file_${index + 1}.txt`;
+        const mimeType = getMimeTypeFromFileName(fileName);
+        
+        let blob;
+        if (data.startsWith('data:')) {
+          const base64Data = data.split(',')[1];
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          blob = new Blob([bytes], { type: mimeType });
+        } else {
+          blob = new Blob([data], { type: mimeType });
+        }
+        
+        return new File([blob], fileName, { type: mimeType });
+      }));
+    }
+    
+    // Simulate drag and drop file upload
+    const dataTransfer = new DataTransfer();
+    fileObjects.forEach(file => dataTransfer.items.add(file));
+    
+    // Highlight target
+    highlightElementWithColor(targetElement, 'green', 2000);
+    
+    // Scroll target into view
+    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    setTimeout(() => {
+      // Simulate drag over
+      const dragOverEvent = new DragEvent('dragover', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: dataTransfer
+      });
+      targetElement.dispatchEvent(dragOverEvent);
+      
+      // Simulate drop
+      setTimeout(() => {
+        const dropEvent = new DragEvent('drop', {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: dataTransfer
+        });
+        targetElement.dispatchEvent(dropEvent);
+        
+        sendResponse({ 
+          success: true, 
+          message: `Simulated file upload: ${fileObjects.length} files`,
+          files_uploaded: fileObjects.length,
+          target: target_selector || 'auto-detected'
+        });
+      }, 200);
+    }, 500);
+    
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Helper function to create DataTransfer object
+function createDataTransfer(files) {
+  const dataTransfer = new DataTransfer();
+  if (files && files.length > 0) {
+    files.forEach(file => {
+      if (file instanceof File) {
+        dataTransfer.items.add(file);
+      } else if (typeof file === 'string') {
+        // Create a simple text file
+        const blob = new Blob([file], { type: 'text/plain' });
+        const fileObj = new File([blob], 'file.txt', { type: 'text/plain' });
+        dataTransfer.items.add(fileObj);
+      }
+    });
+  }
+  return dataTransfer;
+}
+
+// Helper function to get MIME type from file name
+function getMimeTypeFromFileName(fileName) {
+  const extension = fileName.split('.').pop().toLowerCase();
+  const mimeTypes = {
+    'txt': 'text/plain',
+    'html': 'text/html',
+    'css': 'text/css',
+    'js': 'application/javascript',
+    'json': 'application/json',
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'mp4': 'video/mp4',
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'zip': 'application/zip',
+    'rar': 'application/x-rar-compressed'
+  };
+  
+  return mimeTypes[extension] || 'application/octet-stream';
+}
+
+>>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
 // Debug elements on page
 function handleDebugElements(request, sendResponse) {
   try {
