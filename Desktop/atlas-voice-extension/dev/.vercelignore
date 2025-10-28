@@ -1,0 +1,27 @@
+# Exclude README and documentation from Vercel deployments
+README.md
+INSTALLATION.md
+CONTEXT.md
+CLAUDE.md
+*.spec.js
+test-*
+playwright-report/
+test-results/
+.github/
+scripts/
+extension/
+dist/
+assets/
+manifest.json
+background.js
+content.js
+sidepanel.html
+sidepanel.js  
+styles.css
+package.json
+atlas-voice-extension.zip
+*.png
+*.svg
+debug-*
+comprehensive-command-list.md
+browser-automation-solution.md
