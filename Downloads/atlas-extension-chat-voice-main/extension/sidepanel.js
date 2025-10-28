@@ -687,12 +687,34 @@ You have FUNCTION CALLS available for browser automation. Use them proactively!
    - Scroll: "up", "down", "top", "bottom"
    - Example: web_scroll("down", 500)
 
+6. youtube_extract_transcript()
+   - Extract transcript from YouTube videos
+   - Must be on a YouTube video page
+   - Returns full video transcript for analysis/summarization
+   - Example: youtube_extract_transcript()
+
+7. extract_page_text(include_links, format)
+   - Extract all visible text from any webpage
+   - Returns cleaned text content, word count, and optionally links
+   - Format: "plain" or "markdown"
+   - Example: extract_page_text(false, "plain")
+
+8. learn_from_url(url, category)
+   - Fetch content from a URL and save to knowledge base
+   - Automatically extracts and stores webpage content
+   - Categories: "documentation", "article", "tutorial", "reference", "other"
+   - Example: learn_from_url("https://example.com/guide", "documentation")
+
 **When to Use:**
 - User says "fill out this form" → Use web_extract_data to see forms, then web_fill_form
 - User says "click the submit button" → Use web_click_element
 - User says "go to Google" → Use web_navigate
 - User uploads PDF with data → Extract data and use web_fill_form automatically
 - User says "what's on this page" → Use web_extract_data
+- User says "summarize this YouTube video" → Use youtube_extract_transcript then summarize
+- User says "extract the transcript" on YouTube → Use youtube_extract_transcript
+- User says "read this page" → Use extract_page_text
+- User says "learn from this URL" or "save this to knowledge" → Use learn_from_url
 
 **IMPORTANT:**
 - ALWAYS use functions when user asks for browser actions
@@ -786,12 +808,34 @@ You have FUNCTION CALLS available for browser automation. Use them proactively!
    - Scroll: "up", "down", "top", "bottom"
    - Example: web_scroll("down", 500)
 
+6. youtube_extract_transcript()
+   - Extract transcript from YouTube videos
+   - Must be on a YouTube video page
+   - Returns full video transcript for analysis/summarization
+   - Example: youtube_extract_transcript()
+
+7. extract_page_text(include_links, format)
+   - Extract all visible text from any webpage
+   - Returns cleaned text content, word count, and optionally links
+   - Format: "plain" or "markdown"
+   - Example: extract_page_text(false, "plain")
+
+8. learn_from_url(url, category)
+   - Fetch content from a URL and save to knowledge base
+   - Automatically extracts and stores webpage content
+   - Categories: "documentation", "article", "tutorial", "reference", "other"
+   - Example: learn_from_url("https://example.com/guide", "documentation")
+
 **When to Use:**
 - User says "fill out this form" → Use web_extract_data to see forms, then web_fill_form
 - User says "click the submit button" → Use web_click_element
 - User says "go to Google" → Use web_navigate
 - User uploads PDF with data → Extract data and use web_fill_form automatically
 - User says "what's on this page" → Use web_extract_data
+- User says "summarize this YouTube video" → Use youtube_extract_transcript then summarize
+- User says "extract the transcript" on YouTube → Use youtube_extract_transcript
+- User says "read this page" → Use extract_page_text
+- User says "learn from this URL" or "save this to knowledge" → Use learn_from_url
 
 **IMPORTANT:**
 - ALWAYS use functions when user asks for browser actions
@@ -1003,6 +1047,56 @@ Be helpful and conversational.`;
             },
             required: ['direction']
           }
+        },
+        {
+          type: 'function',
+          name: 'youtube_extract_transcript',
+          description: 'Extracts the transcript from a YouTube video. Must be on a YouTube video page.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: []
+          }
+        },
+        {
+          type: 'function',
+          name: 'extract_page_text',
+          description: 'Extracts all visible text content from the current webpage',
+          parameters: {
+            type: 'object',
+            properties: {
+              include_links: {
+                type: 'boolean',
+                description: 'Whether to include links in the extraction (default: false)'
+              },
+              format: {
+                type: 'string',
+                description: 'Output format',
+                enum: ['plain', 'markdown']
+              }
+            },
+            required: []
+          }
+        },
+        {
+          type: 'function',
+          name: 'learn_from_url',
+          description: 'Fetches content from a URL and saves it to the knowledge base for future reference',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: {
+                type: 'string',
+                description: 'The URL to learn from'
+              },
+              category: {
+                type: 'string',
+                description: 'Category for organizing the knowledge (optional)',
+                enum: ['documentation', 'article', 'tutorial', 'reference', 'other']
+              }
+            },
+            required: ['url']
+          }
         }
       ] : [
         // Web Automation Tools (available in both modes)
@@ -1082,6 +1176,56 @@ Be helpful and conversational.`;
               }
             },
             required: ['data_type']
+          }
+        },
+        {
+          type: 'function',
+          name: 'youtube_extract_transcript',
+          description: 'Extracts the transcript from a YouTube video. Must be on a YouTube video page.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: []
+          }
+        },
+        {
+          type: 'function',
+          name: 'extract_page_text',
+          description: 'Extracts all visible text content from the current webpage',
+          parameters: {
+            type: 'object',
+            properties: {
+              include_links: {
+                type: 'boolean',
+                description: 'Whether to include links in the extraction (default: false)'
+              },
+              format: {
+                type: 'string',
+                description: 'Output format',
+                enum: ['plain', 'markdown']
+              }
+            },
+            required: []
+          }
+        },
+        {
+          type: 'function',
+          name: 'learn_from_url',
+          description: 'Fetches content from a URL and saves it to the knowledge base for future reference',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: {
+                type: 'string',
+                description: 'The URL to learn from'
+              },
+              category: {
+                type: 'string',
+                description: 'Category for organizing the knowledge (optional)',
+                enum: ['documentation', 'article', 'tutorial', 'reference', 'other']
+              }
+            },
+            required: ['url']
           }
         }
       ];
@@ -1301,7 +1445,7 @@ IMPORTANT:
               }
             } else if (functionName === 'web_scroll') {
               // Web automation: Scroll
-              const webResult = await executeBrowserCommand('scrollPage', { 
+              const webResult = await executeBrowserCommand('scrollPage', {
                 direction: args.direction,
                 amount: args.amount
               });
@@ -1311,6 +1455,94 @@ IMPORTANT:
               } else {
                 result = { success: false, error: webResult.error || 'Failed to scroll' };
                 addMessage('assistant', `❌ Error scrolling: ${webResult.error}`);
+              }
+            } else if (functionName === 'youtube_extract_transcript') {
+              // Extract YouTube transcript
+              const webResult = await executeBrowserCommand('extractYouTubeTranscript', {});
+              if (webResult.success) {
+                result = webResult;
+                const transcript = webResult.data.transcript;
+                const title = webResult.data.title;
+                addMessage('assistant', `✅ Extracted transcript from "${title}"\n\nTranscript:\n${transcript.substring(0, 500)}${transcript.length > 500 ? '...' : ''}`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to extract transcript' };
+                addMessage('assistant', `❌ ${webResult.message || webResult.error || 'Failed to extract transcript'}`);
+              }
+            } else if (functionName === 'extract_page_text') {
+              // Extract page text
+              const webResult = await executeBrowserCommand('extractPageText', {
+                includeLinks: args.include_links || false,
+                format: args.format || 'plain'
+              });
+              if (webResult.success) {
+                result = webResult;
+                const text = webResult.data.text;
+                const wordCount = webResult.data.wordCount;
+                addMessage('assistant', `✅ Extracted text from page (${wordCount} words)\n\nPreview:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to extract page text' };
+                addMessage('assistant', `❌ Error extracting page text: ${webResult.error}`);
+              }
+            } else if (functionName === 'learn_from_url') {
+              // Learn from URL and save to knowledge base
+              try {
+                const serverUrl = els.serverUrl.value.trim() || 'https://atlas-voice-server.vercel.app';
+
+                // First, extract the page content
+                addMessage('assistant', `🔍 Fetching content from ${args.url}...`);
+
+                // Navigate to the URL
+                const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (currentTab) {
+                  await chrome.tabs.update(currentTab.id, { url: args.url });
+
+                  // Wait for page to load
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+
+                  // Extract the page text
+                  const webResult = await executeBrowserCommand('extractPageText', {
+                    includeLinks: false,
+                    format: 'markdown'
+                  });
+
+                  if (webResult.success) {
+                    const pageData = webResult.data;
+
+                    // Save to knowledge base
+                    const response = await fetch(`${serverUrl}/api/knowledge/item`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        user_id: 'default',
+                        category: args.category || 'other',
+                        title: pageData.title,
+                        content: pageData.formatted,
+                        tags: [args.url, 'web_content']
+                      })
+                    });
+
+                    if (response.ok) {
+                      result = {
+                        success: true,
+                        message: `Successfully learned from ${pageData.title}`,
+                        data: { title: pageData.title, wordCount: pageData.wordCount }
+                      };
+                      addMessage('assistant', `✅ Learned from "${pageData.title}" (${pageData.wordCount} words)\n\nSaved to knowledge base under category: ${args.category || 'other'}`);
+                    } else {
+                      result = { success: false, error: 'Failed to save to knowledge base' };
+                      addMessage('assistant', `❌ Failed to save to knowledge base`);
+                    }
+                  } else {
+                    result = { success: false, error: 'Failed to extract page content' };
+                    addMessage('assistant', `❌ Failed to extract content from URL`);
+                  }
+                } else {
+                  result = { success: false, error: 'No active tab found' };
+                  addMessage('assistant', `❌ No active tab found`);
+                }
+              } catch (error) {
+                result = { success: false, error: error.message };
+                addMessage('assistant', `❌ Error learning from URL: ${error.message}`);
               }
             }
           } catch (error) {

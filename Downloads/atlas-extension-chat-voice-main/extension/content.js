@@ -72,6 +72,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'debugElements':
         handleDebugElements(request, sendResponse);
         break;
+      case 'extractYouTubeTranscript':
+        handleExtractYouTubeTranscript(request, sendResponse);
+        break;
+      case 'extractPageText':
+        handleExtractPageText(request, sendResponse);
+        break;
       default:
         sendResponse({ error: 'Unknown action' });
     }
@@ -842,8 +848,8 @@ function handleDebugElements(request, sendResponse) {
       }
     }
     
-    sendResponse({ 
-      success: true, 
+    sendResponse({
+      success: true,
       data: {
         searchText,
         totalMatches: matches.length,
@@ -851,6 +857,170 @@ function handleDebugElements(request, sendResponse) {
       }
     });
   } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Extract YouTube video transcript
+async function handleExtractYouTubeTranscript(request, sendResponse) {
+  try {
+    // Check if we're on a YouTube video page
+    const isYouTube = window.location.hostname.includes('youtube.com') &&
+                      window.location.pathname.includes('/watch');
+
+    if (!isYouTube) {
+      sendResponse({
+        error: 'Not a YouTube video page',
+        message: 'Please navigate to a YouTube video to extract the transcript'
+      });
+      return;
+    }
+
+    // Get video title
+    const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent ||
+                       document.querySelector('h1.title')?.textContent ||
+                       'Unknown Video';
+
+    // Method 1: Try to extract from existing transcript panel if open
+    let transcriptText = '';
+    const transcriptSegments = document.querySelectorAll('ytd-transcript-segment-renderer');
+
+    if (transcriptSegments.length > 0) {
+      transcriptText = Array.from(transcriptSegments).map(segment => {
+        const text = segment.querySelector('.segment-text')?.textContent?.trim() || '';
+        return text;
+      }).filter(text => text).join(' ');
+    }
+
+    // Method 2: Try to open transcript panel and extract
+    if (!transcriptText) {
+      // Look for the transcript button in the description
+      const moreActionsButton = document.querySelector('button[aria-label*="More actions"]') ||
+                                 document.querySelector('#expand');
+
+      // Try to find and click "Show transcript" button
+      const showTranscriptButton = Array.from(document.querySelectorAll('button, ytd-button-renderer')).find(el => {
+        const text = el.textContent?.toLowerCase() || '';
+        return text.includes('transcript') || text.includes('show transcript');
+      });
+
+      if (showTranscriptButton) {
+        showTranscriptButton.click();
+
+        // Wait for transcript to load
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Try to extract again
+        const segments = document.querySelectorAll('ytd-transcript-segment-renderer');
+        if (segments.length > 0) {
+          transcriptText = Array.from(segments).map(segment => {
+            const text = segment.querySelector('.segment-text')?.textContent?.trim() || '';
+            return text;
+          }).filter(text => text).join(' ');
+        }
+      }
+    }
+
+    // Method 3: Try to extract from transcript in engagement panel
+    if (!transcriptText) {
+      const transcriptPanel = document.querySelector('ytd-transcript-renderer');
+      if (transcriptPanel) {
+        const segments = transcriptPanel.querySelectorAll('ytd-transcript-segment-renderer');
+        transcriptText = Array.from(segments).map(segment => {
+          const text = segment.querySelector('.segment-text')?.textContent?.trim() || '';
+          return text;
+        }).filter(text => text).join(' ');
+      }
+    }
+
+    if (transcriptText) {
+      sendResponse({
+        success: true,
+        data: {
+          title: videoTitle,
+          transcript: transcriptText,
+          url: window.location.href,
+          message: `Successfully extracted transcript from "${videoTitle}"`
+        }
+      });
+    } else {
+      sendResponse({
+        error: 'Transcript not available',
+        message: 'This video does not have a transcript available, or it could not be extracted. Please try opening the transcript manually first.'
+      });
+    }
+  } catch (error) {
+    console.error('YouTube transcript extraction error:', error);
+    sendResponse({ error: error.message });
+  }
+}
+
+// Extract all visible text from the current page
+function handleExtractPageText(request, sendResponse) {
+  try {
+    const { includeLinks = false, format = 'plain' } = request;
+
+    // Get page title
+    const pageTitle = document.title;
+    const pageUrl = window.location.href;
+
+    // Remove script, style, and other non-content elements
+    const clone = document.body.cloneNode(true);
+    const elementsToRemove = clone.querySelectorAll('script, style, nav, header, footer, aside, [role="navigation"]');
+    elementsToRemove.forEach(el => el.remove());
+
+    // Extract text content
+    let textContent = clone.textContent || '';
+
+    // Clean up whitespace
+    textContent = textContent
+      .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+      .replace(/\n\s*\n/g, '\n')  // Remove empty lines
+      .trim();
+
+    // Extract links if requested
+    let links = [];
+    if (includeLinks) {
+      const linkElements = document.querySelectorAll('a[href]');
+      links = Array.from(linkElements).map(link => ({
+        text: link.textContent.trim(),
+        href: link.href
+      })).filter(link => link.text && link.href);
+    }
+
+    // Format output
+    let output = '';
+    if (format === 'markdown') {
+      output = `# ${pageTitle}\n\nURL: ${pageUrl}\n\n${textContent}`;
+      if (links.length > 0) {
+        output += '\n\n## Links\n';
+        links.forEach(link => {
+          output += `\n- [${link.text}](${link.href})`;
+        });
+      }
+    } else {
+      output = `Title: ${pageTitle}\nURL: ${pageUrl}\n\n${textContent}`;
+      if (links.length > 0) {
+        output += '\n\nLinks:\n';
+        links.forEach(link => {
+          output += `\n- ${link.text}: ${link.href}`;
+        });
+      }
+    }
+
+    sendResponse({
+      success: true,
+      data: {
+        title: pageTitle,
+        url: pageUrl,
+        text: textContent,
+        links: links,
+        formatted: output,
+        wordCount: textContent.split(/\s+/).length
+      }
+    });
+  } catch (error) {
+    console.error('Page text extraction error:', error);
     sendResponse({ error: error.message });
   }
 }
