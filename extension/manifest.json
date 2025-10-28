@@ -12,7 +12,8 @@
     "tabs",
     "downloads",
     "scripting",
-    "webNavigation"
+    "webNavigation",
+    "browserView"
   ],
   "host_permissions": [
     "https://api.openai.com/*",

@@ -1280,3 +1280,148 @@ h1 {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* Browser View Styles */
+.browser-view-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+}
+
+.browser-view-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.browser-view-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.browser-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.browser-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--brand);
+}
+
+.browser-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.browser-btn.close:hover {
+  background: var(--error);
+  border-color: var(--error);
+  color: white;
+}
+
+.browser-url-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px;
+}
+
+.browser-url-bar input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.browser-url-bar input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.browser-go-btn {
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.browser-go-btn:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+.browser-view-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.browser-view-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: white;
+}
+
+/* Browser View Loading State */
+.browser-view-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Browser View Error State */
+.browser-view-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--error);
+  font-size: 14px;
+}
+
+.browser-view-error button {
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.browser-view-error button:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}

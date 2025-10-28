@@ -58,6 +58,14 @@
 
         <div class="setting-item">
           <label class="mode-toggle">
+            <input type="checkbox" id="browserViewMode" />
+            <span>Browser View mode</span>
+          </label>
+          <p class="mode-description">Open websites directly in the extension panel</p>
+        </div>
+
+        <div class="setting-item">
+          <label class="mode-toggle">
             <input type="checkbox" id="continuousMode" />
             <span>Continuous mode</span>
           </label>
@@ -360,6 +368,45 @@
 
     <!-- Main Content Container (Always visible, settings slides over it) -->
     <div class="content-area">
+      <!-- Browser View Container -->
+      <div class="browser-view-container" id="browserViewContainer" style="display:none;">
+        <div class="browser-view-header">
+          <div class="browser-view-controls">
+            <button id="browserBackBtn" class="browser-btn" title="Go Back">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button id="browserForwardBtn" class="browser-btn" title="Go Forward">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button id="browserRefreshBtn" class="browser-btn" title="Refresh">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
+            </button>
+            <div class="browser-url-bar">
+              <input type="text" id="browserUrlInput" placeholder="Enter URL..." />
+              <button id="browserGoBtn" class="browser-go-btn">Go</button>
+            </div>
+            <button id="browserCloseBtn" class="browser-btn close" title="Close Browser View">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="browser-view-content">
+          <iframe id="browserViewFrame" src="about:blank" frameborder="0"></iframe>
+        </div>
+      </div>
+
       <!-- Centered Voice Orb (Always centered in remaining space) -->
       <div class="orb-container" id="voiceOrbWrapper">
         <div class="voice-orb-large" id="voiceOrb">
