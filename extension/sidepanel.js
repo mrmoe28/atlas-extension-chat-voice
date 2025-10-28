@@ -2371,8 +2371,6 @@ const BrowserView = (() => {
   }
 
   function navigateToUrl(url) {
-    if (!elements.frame) return;
-
     const targetUrl = url || elements.urlInput?.value;
     if (!targetUrl) return;
 
@@ -2399,9 +2397,9 @@ const BrowserView = (() => {
       elements.urlInput.value = normalizedUrl;
     }
 
-    // Navigate frame
+    // Open URL in new tab instead of iframe (Chrome security restriction)
     try {
-      elements.frame.src = normalizedUrl;
+      chrome.tabs.create({ url: normalizedUrl });
       updateNavigationButtons();
     } catch (error) {
       console.error('Navigation error:', error);
@@ -2414,7 +2412,8 @@ const BrowserView = (() => {
       historyIndex--;
       const url = history[historyIndex];
       currentUrl = url;
-      elements.frame.src = url;
+      // Open in new tab instead of iframe
+      chrome.tabs.create({ url: url });
       if (elements.urlInput) elements.urlInput.value = url;
       updateNavigationButtons();
     }
@@ -2425,16 +2424,20 @@ const BrowserView = (() => {
       historyIndex++;
       const url = history[historyIndex];
       currentUrl = url;
-      elements.frame.src = url;
+      // Open in new tab instead of iframe
+      chrome.tabs.create({ url: url });
       if (elements.urlInput) elements.urlInput.value = url;
       updateNavigationButtons();
     }
   }
 
   function refresh() {
-    if (elements.frame && currentUrl) {
-      elements.frame.src = currentUrl;
-    }
+    // Refresh current tab instead of iframe
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.reload(tabs[0].id);
+      }
+    });
   }
 
   function updateNavigationButtons() {
