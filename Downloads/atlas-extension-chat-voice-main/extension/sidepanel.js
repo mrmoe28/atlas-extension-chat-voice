@@ -164,7 +164,13 @@ const els = {
   memoryEnabled: document.getElementById('memoryEnabled'),
   specialInstructions: document.getElementById('specialInstructions'),
   viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
-  clearMemoryBtn: document.getElementById('clearMemoryBtn')
+  clearMemoryBtn: document.getElementById('clearMemoryBtn'),
+  chatInputWrapper: document.getElementById('chatInputWrapper'),
+  textInput: document.getElementById('textInput'),
+  sendBtn: document.getElementById('sendBtn'),
+  attachBtn: document.getElementById('attachBtn'),
+  fileInput: document.getElementById('fileInput'),
+  attachedFiles: document.getElementById('attachedFiles')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -176,6 +182,7 @@ let isVisionMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
+let attachedFiles = [];
 
 // Settings Modal Management
 let isModalOpen = false;
@@ -1258,6 +1265,7 @@ IMPORTANT:
     els.voiceBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
+    showChatInput(); // Show text input box
   } catch (err) {
     console.error('❌ Connection error:', err);
 
@@ -1270,6 +1278,7 @@ IMPORTANT:
     els.orbStatus.textContent = `Error: ${errorMsg}`;
     els.statusDot.classList.remove('connected');
     connected = false;
+    hideChatInput(); // Hide text input box on error
 
     // Show detailed error in console
     console.error('Full error details:', {
@@ -1307,6 +1316,7 @@ function teardown() {
   els.voiceBtn.disabled = true;
   els.voiceBtn.classList.remove('active');
   els.connectBtn.textContent = 'Connect';
+  hideChatInput(); // Hide text input box
   els.connectBtn.classList.remove('connected');
   
   // Reset UI to show voice orb
@@ -2473,6 +2483,204 @@ function showKnowledgeModal(data) {
   });
 }
 
+// ===================================
+// Text Input & File Upload Functions
+// ===================================
+
+function setupTextInput() {
+  // Show/hide input box when connected
+  const originalConnect = els.connectBtn.onclick;
+
+  // File attachment button
+  els.attachBtn.addEventListener('click', () => {
+    els.fileInput.click();
+  });
+
+  // File selection handler
+  els.fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => addFileAttachment(file));
+    e.target.value = ''; // Reset input
+  });
+
+  // Text input change handler
+  els.textInput.addEventListener('input', () => {
+    els.sendBtn.disabled = !els.textInput.value.trim() && attachedFiles.length === 0;
+  });
+
+  // Send button click handler
+  els.sendBtn.addEventListener('click', () => {
+    sendTextMessage();
+  });
+
+  // Enter key to send
+  els.textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!els.sendBtn.disabled) {
+        sendTextMessage();
+      }
+    }
+  });
+}
+
+function addFileAttachment(file) {
+  // Check file size (max 10MB)
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert('File too large. Maximum size is 10MB.');
+    return;
+  }
+
+  const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+  // Read file
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const fileData = {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      data: e.target.result
+    };
+
+    attachedFiles.push(fileData);
+    renderFilePreview(fileData);
+    updateSendButtonState();
+  };
+
+  if (file.type.startsWith('image/')) {
+    reader.readAsDataURL(file);
+  } else {
+    reader.readAsText(file);
+  }
+}
+
+function renderFilePreview(fileData) {
+  const preview = document.createElement('div');
+  preview.className = 'file-preview';
+  preview.dataset.fileId = fileData.id;
+
+  if (fileData.type.startsWith('image/')) {
+    preview.innerHTML = `
+      <img src="${fileData.data}" class="file-preview-image" alt="${fileData.name}">
+      <div class="file-preview-info">
+        <div class="file-preview-name">${fileData.name}</div>
+        <div class="file-preview-size">${formatFileSize(fileData.size)}</div>
+      </div>
+      <button class="file-remove-btn" onclick="removeFileAttachment('${fileData.id}')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    `;
+  } else {
+    const ext = fileData.name.split('.').pop().toUpperCase();
+    preview.innerHTML = `
+      <div class="file-preview-icon">${ext}</div>
+      <div class="file-preview-info">
+        <div class="file-preview-name">${fileData.name}</div>
+        <div class="file-preview-size">${formatFileSize(fileData.size)}</div>
+      </div>
+      <button class="file-remove-btn" onclick="removeFileAttachment('${fileData.id}')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    `;
+  }
+
+  els.attachedFiles.appendChild(preview);
+}
+
+window.removeFileAttachment = function(fileId) {
+  attachedFiles = attachedFiles.filter(f => f.id !== fileId);
+  const preview = els.attachedFiles.querySelector(`[data-file-id="${fileId}"]`);
+  if (preview) {
+    preview.remove();
+  }
+  updateSendButtonState();
+};
+
+function updateSendButtonState() {
+  els.sendBtn.disabled = !els.textInput.value.trim() && attachedFiles.length === 0;
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+async function sendTextMessage() {
+  const text = els.textInput.value.trim();
+
+  if (!text && attachedFiles.length === 0) return;
+
+  // Build message with attachments
+  let message = text;
+
+  if (attachedFiles.length > 0) {
+    message += '\n\n📎 Attached files:\n';
+    attachedFiles.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        message += `\n[Image: ${file.name}]\n${file.data}`;
+      } else {
+        message += `\n[Document: ${file.name}]\n${file.data}`;
+      }
+    });
+  }
+
+  // Show user message
+  if (text) {
+    addMessage('user', text);
+  }
+
+  // Show file previews in chat
+  attachedFiles.forEach(file => {
+    if (file.type.startsWith('image/')) {
+      addMessage('user', `<img src="${file.data}" style="max-width: 300px; border-radius: 8px;" alt="${file.name}">`);
+    }
+  });
+
+  // Send via data channel if connected
+  if (dataChannel && dataChannel.readyState === 'open') {
+    dataChannel.send(JSON.stringify({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{
+          type: 'input_text',
+          text: message
+        }]
+      }
+    }));
+
+    dataChannel.send(JSON.stringify({ type: 'response.create' }));
+  }
+
+  // Clear input and attachments
+  els.textInput.value = '';
+  attachedFiles = [];
+  els.attachedFiles.innerHTML = '';
+  updateSendButtonState();
+}
+
+// Show input box when connected
+function showChatInput() {
+  els.chatInputWrapper.style.display = 'block';
+}
+
+function hideChatInput() {
+  els.chatInputWrapper.style.display = 'none';
+}
+
 // Initialize
 loadSettings();
 
@@ -2506,3 +2714,4 @@ setupContinuousMode();
 webSpeechFallbackSetup();
 updateOrbState();
 checkFirstTimeUse();
+setupTextInput();
