@@ -7,6 +7,17 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="mic-permission-banner" style="display:none; position:sticky; top:0; z-index:9999; padding:10px 12px; background:#fff7e6; border-bottom:1px solid #ffd39c; font-family:system-ui, sans-serif;">
+    <strong>Microphone access needed.</strong>
+    <div style="margin-top:6px; font-size:13px; line-height:1.35;">
+      Click the microphone icon in your browser's address bar and allow access. If you previously blocked it, open <code>chrome://settings/content/microphone</code> and allow access for this extension.
+    </div>
+    <div style="margin-top:8px; display:flex; gap:8px;">
+      <button id="mic-permission-try-again" style="padding:6px 10px; border:1px solid #222; background:#fff; cursor:pointer;">Try again</button>
+      <button id="mic-permission-dismiss" style="padding:6px 10px; border:1px solid #bbb; background:#f6f6f6; cursor:pointer;">Dismiss</button>
+    </div>
+  </div>
+  
   <div class="app">
     <!-- Fixed Header -->
     <header class="header-fixed">
