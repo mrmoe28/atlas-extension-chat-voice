@@ -1097,6 +1097,21 @@ Be helpful and conversational.`;
             },
             required: ['url']
           }
+        },
+        {
+          type: 'function',
+          name: 'ocr_extract_text',
+          description: 'Extract text from images using OCR (Optical Character Recognition). Works with photos of documents, screenshots, handwritten notes, forms, receipts, etc.',
+          parameters: {
+            type: 'object',
+            properties: {
+              image_data: {
+                type: 'string',
+                description: 'Base64 encoded image data or data URL'
+              }
+            },
+            required: ['image_data']
+          }
         }
       ] : [
         // Web Automation Tools (available in both modes)
@@ -1226,6 +1241,21 @@ Be helpful and conversational.`;
               }
             },
             required: ['url']
+          }
+        },
+        {
+          type: 'function',
+          name: 'ocr_extract_text',
+          description: 'Extract text from images using OCR (Optical Character Recognition). Works with photos of documents, screenshots, handwritten notes, forms, receipts, etc.',
+          parameters: {
+            type: 'object',
+            properties: {
+              image_data: {
+                type: 'string',
+                description: 'Base64 encoded image data or data URL'
+              }
+            },
+            required: ['image_data']
           }
         }
       ];
@@ -1543,6 +1573,49 @@ IMPORTANT:
               } catch (error) {
                 result = { success: false, error: error.message };
                 addMessage('assistant', `❌ Error learning from URL: ${error.message}`);
+              }
+            } else if (functionName === 'ocr_extract_text') {
+              // OCR: Extract text from image
+              try {
+                const serverUrl = els.serverUrl.value.trim() || 'https://atlas-voice-server.vercel.app';
+                const imageData = args.image_data;
+
+                if (!imageData) {
+                  result = { success: false, error: 'Image data required' };
+                  addMessage('assistant', `❌ Image data required for OCR`);
+                } else {
+                  addMessage('assistant', `🔍 Extracting text from image using OCR...`);
+
+                  const response = await fetch(`${serverUrl}/api/ocr`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      image: imageData
+                    })
+                  });
+
+                  if (response.ok) {
+                    const ocrData = await response.json();
+                    const extractedText = ocrData.text;
+                    const wordCount = ocrData.wordCount;
+
+                    result = {
+                      success: true,
+                      text: extractedText,
+                      wordCount: wordCount
+                    };
+
+                    // Show preview of extracted text
+                    const preview = extractedText.substring(0, 500);
+                    addMessage('assistant', `✅ Extracted text from image (${wordCount} words)\n\nExtracted Text:\n${preview}${extractedText.length > 500 ? '\n\n...(text continues)' : ''}`);
+                  } else {
+                    result = { success: false, error: 'OCR API request failed' };
+                    addMessage('assistant', `❌ Failed to extract text from image`);
+                  }
+                }
+              } catch (error) {
+                result = { success: false, error: error.message };
+                addMessage('assistant', `❌ Error performing OCR: ${error.message}`);
               }
             }
           } catch (error) {

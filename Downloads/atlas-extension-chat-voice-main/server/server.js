@@ -414,6 +414,80 @@ app.post('/api/desktop', async (req, res) => {
 });
 
 /**
+ * OCR API endpoint
+ * Extracts text from images using GPT-4o Vision
+ */
+app.post('/api/ocr', async (req, res) => {
+  try {
+    const { image, language = 'auto' } = req.body;
+
+    if (!image) {
+      return res.status(400).json({ error: 'Image required' });
+    }
+
+    console.log('Extracting text from image with GPT-4o OCR...');
+
+    // Call OpenAI Vision API with OCR-specific prompt
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${(process.env.OPENAI_API_KEY || '').trim()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Extract ALL text from this image. Return ONLY the extracted text, maintaining the original layout and structure as much as possible. Include:
+- All visible text (printed or handwritten)
+- Numbers, dates, and special characters
+- Text from tables, forms, or structured layouts
+- Preserve line breaks and spacing
+
+Do not add explanations or descriptions. Just return the extracted text exactly as it appears.`
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: image
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OCR API error:', response.status, errorText);
+      throw new Error(`OCR API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const extractedText = data.choices[0]?.message?.content || '';
+
+    console.log('OCR extraction complete');
+
+    res.json({
+      success: true,
+      text: extractedText,
+      length: extractedText.length,
+      wordCount: extractedText.split(/\s+/).filter(w => w).length,
+      model: 'gpt-4o'
+    });
+  } catch (e) {
+    console.error('OCR API error:', e);
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+/**
  * Vision API endpoint
  * Analyzes screenshots using GPT-4 Vision
  */
