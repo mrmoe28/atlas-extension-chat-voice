@@ -2,6 +2,135 @@
  * Atlas Voice - Minimal Interface with Hamburger Menu
  */
 
+// ===== Mic Permission + Stream Manager =====================================
+const MicPermission = (() => {
+  let inFlight = false;
+  let cachedStream = null;
+  const listeners = new Set();
+
+  function notify(ev) { listeners.forEach(fn => { try { fn(ev); } catch {} }); }
+
+  async function queryPermission() {
+    try {
+      if (!('permissions' in navigator)) return 'prompt';
+      const status = await navigator.permissions.query({ name: 'microphone' });
+      return status.state;
+    } catch {
+      return 'prompt';
+    }
+  }
+
+  function showBanner(show) {
+    const el = document.getElementById('mic-permission-banner');
+    if (!el) return;
+    el.style.display = show ? 'block' : 'none';
+  }
+
+  function wireBannerButtons() {
+    const tryBtn = document.getElementById('mic-permission-try-again');
+    const dismissBtn = document.getElementById('mic-permission-dismiss');
+    if (tryBtn && !tryBtn.dataset._wired) {
+      tryBtn.dataset._wired = '1';
+      tryBtn.addEventListener('click', async () => {
+        showBanner(false);
+        try {
+          await requestStream();
+        } catch (e) {
+          console.warn('Retry failed:', e);
+          showBanner(true);
+        }
+      });
+    }
+    if (dismissBtn && !dismissBtn.dataset._wired) {
+      dismissBtn.dataset._wired = '1';
+      dismissBtn.addEventListener('click', () => showBanner(false));
+    }
+  }
+
+  async function requestStream() {
+    if (cachedStream && cachedStream.active) return cachedStream;
+
+    if (inFlight) {
+      return new Promise((resolve, reject) => {
+        const off = (ev) => {
+          if (ev.type === 'mic:ready') { listeners.delete(off); resolve(cachedStream); }
+          if (ev.type === 'mic:error') { listeners.delete(off); reject(ev.error); }
+        };
+        listeners.add(off);
+      });
+    }
+
+    inFlight = true;
+    wireBannerButtons();
+
+    try {
+      const constraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      cachedStream = stream;
+      showBanner(false);
+      inFlight = false;
+      notify({ type: 'mic:ready' });
+      return stream;
+    } catch (err) {
+      inFlight = false;
+
+      const name = err && err.name ? err.name : 'Error';
+      const msg = (err && (err.message || err.toString())) || 'Unknown error';
+
+      if (name === 'NotAllowedError') {
+        showBanner(true);
+        const wrapped = new Error('Microphone permission was blocked or dismissed. Click the mic icon in the address bar to allow, then click "Try again".');
+        wrapped.cause = err;
+        notify({ type: 'mic:error', error: wrapped });
+        throw wrapped;
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        const wrapped = new Error('No microphone detected. Please connect a mic or select a working input in system settings, then try again.');
+        wrapped.cause = err;
+        notify({ type: 'mic:error', error: wrapped });
+        throw wrapped;
+      } else if (name === 'NotReadableError' || name === 'AbortError') {
+        const wrapped = new Error('The microphone is currently in use by another application. Close other apps using the mic and try again.');
+        wrapped.cause = err;
+        notify({ type: 'mic:error', error: wrapped });
+        throw wrapped;
+      }
+
+      const wrapped = new Error(`Failed to access microphone: ${name}: ${msg}`);
+      wrapped.cause = err;
+      notify({ type: 'mic:error', error: wrapped });
+      throw wrapped;
+    }
+  }
+
+  return {
+    async ensureMic() {
+      const state = await queryPermission();
+      try {
+        return await requestStream();
+      } catch (e) {
+        showBanner(true);
+        throw e;
+      }
+    },
+    getCachedStream() { return cachedStream; },
+    on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    clearCache() {
+      if (cachedStream) {
+        try { cachedStream.getTracks().forEach(t => t.stop()); } catch {}
+      }
+      cachedStream = null;
+    }
+  };
+})();
+
 const els = {
   menuBtn: document.getElementById('menuBtn'),
   settingsModal: document.getElementById('settingsModal'),
@@ -247,13 +376,112 @@ function addMessage(role, content) {
 
   const contentEl = document.createElement('div');
   contentEl.className = 'message-content';
-  contentEl.textContent = content;
+
+  // Parse content for prompt blocks
+  const parsedContent = parsePromptBlocks(content);
+  contentEl.innerHTML = parsedContent;
+
+  // Add copy button for Atlas messages
+  if (role === 'assistant') {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.innerHTML = '📋 Copy';
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyToClipboard(content, copyBtn);
+    });
+    contentEl.appendChild(copyBtn);
+
+    // Add click handlers for prompt block copy buttons
+    setTimeout(() => {
+      const promptCopyBtns = contentEl.querySelectorAll('.prompt-copy-btn');
+      promptCopyBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const promptContent = btn.dataset.content;
+          copyToClipboard(promptContent, btn);
+        });
+      });
+    }, 0);
+  }
 
   messageEl.appendChild(avatar);
   messageEl.appendChild(contentEl);
 
   els.chatContainer.appendChild(messageEl);
   els.chatContainer.scrollTop = els.chatContainer.scrollHeight;
+}
+
+// Parse content for prompt blocks with ```prompt syntax
+function parsePromptBlocks(content) {
+  // Match ```prompt ... ``` blocks
+  const promptRegex = /```prompt\n([\s\S]*?)```/g;
+
+  let result = content;
+  let match;
+  const promptBlocks = [];
+
+  while ((match = promptRegex.exec(content)) !== null) {
+    promptBlocks.push({
+      full: match[0],
+      content: match[1].trim()
+    });
+  }
+
+  // Replace prompt blocks with formatted HTML
+  promptBlocks.forEach((block, index) => {
+    const promptId = `prompt-${Date.now()}-${index}`;
+    const promptHtml = `
+      <div class="prompt-block">
+        <div class="prompt-block-header">
+          <span class="prompt-label">📝 Copyable Prompt</span>
+          <button class="prompt-copy-btn" data-content="${escapeHtml(block.content)}">
+            📋 Copy Prompt
+          </button>
+        </div>
+        <div class="prompt-content">${escapeHtml(block.content)}</div>
+      </div>
+    `;
+    result = result.replace(block.full, promptHtml);
+  });
+
+  // Escape remaining HTML and preserve line breaks
+  const parts = result.split(/(<div class="prompt-block">[\s\S]*?<\/div>)/);
+  result = parts.map(part => {
+    if (part.startsWith('<div class="prompt-block">')) {
+      return part; // Keep prompt blocks as HTML
+    }
+    return escapeHtml(part).replace(/\n/g, '<br>');
+  }).join('');
+
+  return result;
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Copy to clipboard functionality
+function copyToClipboard(text, button) {
+  navigator.clipboard.writeText(text).then(() => {
+    const originalText = button.innerHTML;
+    button.innerHTML = '✅ Copied!';
+    button.classList.add('copied');
+
+    setTimeout(() => {
+      button.innerHTML = originalText;
+      button.classList.remove('copied');
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    button.innerHTML = '❌ Failed';
+    setTimeout(() => {
+      button.innerHTML = '📋 Copy';
+    }, 2000);
+  });
 }
 
 function showTypingIndicator() {
@@ -285,11 +513,20 @@ function removeTypingIndicator() {
 async function connectRealtime() {
   try {
     els.orbStatus.textContent = 'Connecting...';
+    
+    // Use MicPermission for microphone access
+    let localStream;
+    try {
+      localStream = await MicPermission.ensureMic();
+    } catch (e) {
+      console.error('WebRTC connection error (mic):', e);
+      return;
+    }
+    
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
-    await ensureMic();
 
     pc = new RTCPeerConnection();
-    for (const track of micStream.getTracks()) pc.addTrack(track, micStream);
+    for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
 
     createRemoteAudio();
     pc.ontrack = (e) => { remoteAudioEl.srcObject = e.streams[0]; };
@@ -301,151 +538,140 @@ async function connectRealtime() {
 
       // Configure session with desktop commander instructions if enabled
       const instructions = isDesktopMode
-        ? `You are Atlas Voice. ULTRA CONCISE responses only.
+        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander and Web Automation capabilities.
 
-Commands - say just 2 words:
-"Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
-"Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
-"Creating file. [CMD:CREATE_FILE:test.txt]"
-"Creating folder. [CMD:CREATE_FOLDER:~/Downloads/NewFolder]"
-"Deleting file. [CMD:DELETE_FILE:~/Downloads/old.txt]"
-"Renaming file. [CMD:RENAME_FILE:old.txt:new.txt]"
-"Copying file. [CMD:COPY_FILE:source.txt:dest.txt]"
-"Moving file. [CMD:MOVE_FILE:source.txt:dest.txt]"
-"Opening website. [CMD:OPEN_URL:google.com]"
-"Refreshing page. [CMD:REFRESH_PAGE:]"
-"Going back. [CMD:GO_BACK:]"
-"Going forward. [CMD:GO_FORWARD:]"
-"Opening tab. [CMD:NEW_TAB:]"
-"Closing tab. [CMD:CLOSE_TAB:]"
-"Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
-"Clicking button. [CMD:CLICK_ELEMENT:Search]"
-"Double clicking. [CMD:DOUBLE_CLICK:file]"
-"Right clicking. [CMD:RIGHT_CLICK:menu]"
-"Typing text. [CMD:TYPE_TEXT:hello world]"
-"Clearing field. [CMD:CLEAR_FIELD:input]"
-"Selecting all. [CMD:SELECT_ALL:]"
-"Copying text. [CMD:COPY_TEXT:]"
-"Pasting text. [CMD:PASTE_TEXT:hello]"
-"Scrolling down. [CMD:SCROLL_PAGE:down]"
-"Scrolling up. [CMD:SCROLL_PAGE:up]"
-"Scrolling to top. [CMD:SCROLL_TO_TOP:]"
-"Scrolling to bottom. [CMD:SCROLL_TO_BOTTOM:]"
-"Dragging element. [CMD:DRAG_DROP:source:target]"
-"Pressing key. [CMD:KEY_PRESS:Enter]"
-"Pressing combination. [CMD:KEY_COMBINATION:Ctrl+C]"
-"Volume up. [CMD:VOLUME_UP:]"
-"Volume down. [CMD:VOLUME_DOWN:]"
-"Muting volume. [CMD:MUTE_VOLUME:]"
-"Brightness up. [CMD:BRIGHTNESS_UP:]"
-"Brightness down. [CMD:BRIGHTNESS_DOWN:]"
-"Locking screen. [CMD:LOCK_SCREEN:]"
-"Sleeping computer. [CMD:SLEEP_COMPUTER:]"
-"Getting time. [CMD:GET_TIME:]"
-"Getting date. [CMD:GET_DATE:]"
-"Searching web. [CMD:SEARCH_WEB:artificial intelligence]"
-"Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
-"Searching Wikipedia. [CMD:SEARCH_WIKIPEDIA:history]"
+🎯 CAPABILITIES:
+- Desktop Commander: Full system control (files, apps, system settings)
+- Web Automation: Browser control, form filling, element interaction
+- Voice Control: Natural language commands
+- Screen Vision: Can see and analyze your screen
+- Prompt Generation: Create copyable prompts for the user
+
+📝 CREATING PROMPTS:
+To create a copyable prompt block that the user can easily copy and paste, use this syntax:
+
+\`\`\`prompt
+Your prompt text here...
+This can be multiple lines.
+The user will see a nicely formatted block with a copy button.
+\`\`\`
+
+Example:
+User: "Create a prompt for writing a blog post about AI"
+You: "Here's a prompt for your blog post:
+
+\`\`\`prompt
+Write a comprehensive blog post about artificial intelligence that covers:
+1. Current state of AI technology
+2. Real-world applications
+3. Future possibilities
+4. Ethical considerations
+
+Target audience: Tech-savvy professionals
+Tone: Informative but accessible
+Length: 1500-2000 words
+\`\`\`
+
+This prompt will help you create a well-structured AI blog post!"
+
+🖥️ DESKTOP COMMANDER COMMANDS:
+File Operations: OPEN_FOLDER, CREATE_FILE, CREATE_FOLDER, DELETE_FILE, RENAME_FILE, COPY_FILE, MOVE_FILE
+App Control: LAUNCH_APP, OPEN_URL, REFRESH_PAGE, GO_BACK, GO_FORWARD, NEW_TAB, CLOSE_TAB
+System Control: VOLUME_UP, VOLUME_DOWN, MUTE_VOLUME, BRIGHTNESS_UP, BRIGHTNESS_DOWN, LOCK_SCREEN, SLEEP_COMPUTER
+Screen Control: TAKE_SCREENSHOT, CLICK_ELEMENT, DOUBLE_CLICK, RIGHT_CLICK, TYPE_TEXT, CLEAR_FIELD
+Navigation: SCROLL_PAGE, SCROLL_TO_TOP, SCROLL_TO_BOTTOM, DRAG_DROP
+Keyboard: KEY_PRESS, KEY_COMBINATION, SELECT_ALL, COPY_TEXT, PASTE_TEXT
+Information: GET_TIME, GET_DATE, SEARCH_WEB, SEARCH_YOUTUBE, SEARCH_WIKIPEDIA
+
+🌐 WEB AUTOMATION FEATURES:
+- Fill forms automatically
+- Click buttons and links
+- Navigate websites
+- Extract data from pages
+- Take screenshots
+- Control browser tabs
+- Search and filter content
+- Interact with web applications
+
+📝 RESPONSE FORMAT:
+For Desktop Commands: "Action description. [CMD:COMMAND_TYPE:parameter]"
+For Web Automation: "Web action description. [WEB:action:details]"
+For General Help: Provide helpful, conversational responses
 
 Examples:
 User: "Open my downloads folder"
-You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
+You: "Opening Downloads folder. [CMD:OPEN_FOLDER:~/Downloads]"
 
-User: "Create a folder called TestFolder"
-You: "Creating folder. [CMD:CREATE_FOLDER:~/Downloads/TestFolder]"
+User: "Fill out the contact form with my email"
+You: "Filling contact form. [WEB:fill_form:email=user@example.com]"
 
-User: "Delete the old file"
-You: "Deleting file. [CMD:DELETE_FILE:~/Downloads/old.txt]"
+User: "Click the submit button"
+You: "Clicking submit button. [WEB:click_element:submit]"
 
-User: "Rename my document to final version"
-You: "Renaming file. [CMD:RENAME_FILE:~/Documents/draft.txt:final-version.txt]"
-
-User: "Copy this file to desktop"
-You: "Copying file. [CMD:COPY_FILE:~/Downloads/file.txt:~/Desktop/file.txt]"
-
-User: "Move this to trash"
-You: "Moving file. [CMD:MOVE_FILE:~/Downloads/temp.txt:~/Trash/temp.txt]"
-
-User: "Open Google"
-You: "Opening website. [CMD:OPEN_URL:google.com]"
-
-User: "Refresh the page"
-You: "Refreshing page. [CMD:REFRESH_PAGE:]"
-
-User: "Go back"
-You: "Going back. [CMD:GO_BACK:]"
-
-User: "Open new tab"
-You: "Opening tab. [CMD:NEW_TAB:]"
-
-User: "Take screenshot"
+User: "Take a screenshot of this page"
 You: "Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
 
+User: "Search for 'artificial intelligence' on Google"
+You: "Searching Google. [CMD:SEARCH_WEB:artificial intelligence]"
+
+User: "Open YouTube and search for music"
+You: "Opening YouTube. [CMD:SEARCH_YOUTUBE:music]"
+
+Be helpful, concise, and always confirm actions taken.`
+        : `You are Atlas Voice, a helpful AI assistant with web automation capabilities.
+
+🌐 WEB AUTOMATION FEATURES:
+- Fill forms automatically
+- Click buttons and links
+- Navigate websites
+- Extract data from pages
+- Take screenshots
+- Control browser tabs
+- Search and filter content
+
+📝 CREATING PROMPTS:
+To create a copyable prompt block that the user can easily copy and paste, use this syntax:
+
+\`\`\`prompt
+Your prompt text here...
+This can be multiple lines.
+The user will see a nicely formatted block with a copy button.
+\`\`\`
+
+Example:
+User: "Create a prompt for social media content"
+You: "Here's your social media prompt:
+
+\`\`\`prompt
+Create engaging social media content for:
+Platform: [Instagram/Twitter/LinkedIn]
+Topic: [Your topic]
+Tone: Professional yet approachable
+Include: 3 post ideas with captions
+Add relevant hashtags
+\`\`\`
+
+This will help you generate great social content!"
+
+📝 RESPONSE FORMAT:
+For Web Actions: "Action description. [WEB:action:details]"
+For General Help: Provide helpful, conversational responses
+
+Examples:
+User: "Fill out the contact form"
+You: "Filling contact form. [WEB:fill_form:name=John,email=john@example.com]"
+
 User: "Click the search button"
-You: "Clicking button. [CMD:CLICK_ELEMENT:Search]"
+You: "Clicking search button. [WEB:click_element:search]"
 
-User: "Double click the file"
-You: "Double clicking. [CMD:DOUBLE_CLICK:file]"
+User: "Take a screenshot"
+You: "Taking screenshot. [WEB:screenshot:]"
 
-User: "Right click here"
-You: "Right clicking. [CMD:RIGHT_CLICK:menu]"
-
-User: "Type hello world"
-You: "Typing text. [CMD:TYPE_TEXT:hello world]"
-
-User: "Clear the field"
-You: "Clearing field. [CMD:CLEAR_FIELD:input]"
-
-User: "Select all"
-You: "Selecting all. [CMD:SELECT_ALL:]"
-
-User: "Copy this text"
-You: "Copying text. [CMD:COPY_TEXT:]"
-
-User: "Paste hello"
-You: "Pasting text. [CMD:PASTE_TEXT:hello]"
-
-User: "Scroll down"
-You: "Scrolling down. [CMD:SCROLL_PAGE:down]"
-
-User: "Scroll to top"
-You: "Scrolling to top. [CMD:SCROLL_TO_TOP:]"
-
-User: "Drag this to there"
-You: "Dragging element. [CMD:DRAG_DROP:source:target]"
-
-User: "Press Enter"
-You: "Pressing key. [CMD:KEY_PRESS:Enter]"
-
-User: "Press Ctrl+C"
-You: "Pressing combination. [CMD:KEY_COMBINATION:Ctrl+C]"
-
-User: "Turn up the volume"
-You: "Volume up. [CMD:VOLUME_UP:]"
-
-User: "Make it brighter"
-You: "Brightness up. [CMD:BRIGHTNESS_UP:]"
-
-User: "Lock my computer"
-You: "Locking screen. [CMD:LOCK_SCREEN:]"
-
-User: "What time is it"
-You: "Getting time. [CMD:GET_TIME:]"
-
-User: "Search for AI"
-You: "Searching web. [CMD:SEARCH_WEB:artificial intelligence]"
-
-User: "Search YouTube for music"
-You: "Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
-
-User: "What's the weather?"
-You: "Can't check weather."
-
-MAX 3 words per response.`
-        : `You are Atlas Voice. Keep responses under 5 words.`;
+Be helpful and conversational.`;
 
       // Define tools for function calling
       const tools = isDesktopMode ? [
+        // Desktop Commander Tools
         {
           type: 'function',
           name: 'open_webpage',
@@ -509,8 +735,187 @@ MAX 3 words per response.`
             },
             required: ['filename', 'location']
           }
+        },
+        // Web Automation Tools
+        {
+          type: 'function',
+          name: 'web_click_element',
+          description: 'Clicks on a web page element (button, link, etc.)',
+          parameters: {
+            type: 'object',
+            properties: {
+              selector: {
+                type: 'string',
+                description: 'CSS selector or text content to identify the element'
+              },
+              element_type: {
+                type: 'string',
+                description: 'Type of element (button, link, input, etc.)',
+                enum: ['button', 'link', 'input', 'div', 'span', 'other']
+              }
+            },
+            required: ['selector']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_fill_form',
+          description: 'Fills out form fields on a web page',
+          parameters: {
+            type: 'object',
+            properties: {
+              fields: {
+                type: 'object',
+                description: 'Object containing field names and values to fill',
+                additionalProperties: {
+                  type: 'string'
+                }
+              }
+            },
+            required: ['fields']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_navigate',
+          description: 'Navigates to a URL or performs browser navigation',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                description: 'Navigation action',
+                enum: ['go_to_url', 'go_back', 'go_forward', 'refresh', 'new_tab', 'close_tab']
+              },
+              url: {
+                type: 'string',
+                description: 'URL to navigate to (required for go_to_url action)'
+              }
+            },
+            required: ['action']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_extract_data',
+          description: 'Extracts data from the current web page',
+          parameters: {
+            type: 'object',
+            properties: {
+              data_type: {
+                type: 'string',
+                description: 'Type of data to extract',
+                enum: ['text', 'links', 'images', 'forms', 'tables', 'all']
+              },
+              selector: {
+                type: 'string',
+                description: 'CSS selector to limit extraction scope (optional)'
+              }
+            },
+            required: ['data_type']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_scroll',
+          description: 'Scrolls the web page',
+          parameters: {
+            type: 'object',
+            properties: {
+              direction: {
+                type: 'string',
+                description: 'Scroll direction',
+                enum: ['up', 'down', 'top', 'bottom']
+              },
+              amount: {
+                type: 'number',
+                description: 'Number of pixels to scroll (optional)'
+              }
+            },
+            required: ['direction']
+          }
         }
-      ] : [];
+      ] : [
+        // Web Automation Tools (available in both modes)
+        {
+          type: 'function',
+          name: 'web_click_element',
+          description: 'Clicks on a web page element (button, link, etc.)',
+          parameters: {
+            type: 'object',
+            properties: {
+              selector: {
+                type: 'string',
+                description: 'CSS selector or text content to identify the element'
+              },
+              element_type: {
+                type: 'string',
+                description: 'Type of element (button, link, input, etc.)',
+                enum: ['button', 'link', 'input', 'div', 'span', 'other']
+              }
+            },
+            required: ['selector']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_fill_form',
+          description: 'Fills out form fields on a web page',
+          parameters: {
+            type: 'object',
+            properties: {
+              fields: {
+                type: 'object',
+                description: 'Object containing field names and values to fill',
+                additionalProperties: {
+                  type: 'string'
+                }
+              }
+            },
+            required: ['fields']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_navigate',
+          description: 'Navigates to a URL or performs browser navigation',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                description: 'Navigation action',
+                enum: ['go_to_url', 'go_back', 'go_forward', 'refresh', 'new_tab', 'close_tab']
+              },
+              url: {
+                type: 'string',
+                description: 'URL to navigate to (required for go_to_url action)'
+              }
+            },
+            required: ['action']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_extract_data',
+          description: 'Extracts data from the current web page',
+          parameters: {
+            type: 'object',
+            properties: {
+              data_type: {
+                type: 'string',
+                description: 'Type of data to extract',
+                enum: ['text', 'links', 'images', 'forms', 'tables', 'all']
+              },
+              selector: {
+                type: 'string',
+                description: 'CSS selector to limit extraction scope (optional)'
+              }
+            },
+            required: ['data_type']
+          }
+        }
+      ];
 
       // Send session update with instructions and tools
       const sessionUpdate = {
@@ -644,6 +1049,99 @@ IMPORTANT:
                 });
                 result = { success: true, message: `Created ${args.filename}` };
                 addMessage('assistant', `✅ Created ${args.filename}`);
+              }
+            } else if (functionName === 'web_click_element') {
+              // Web automation: Click element
+              const webResult = await executeBrowserCommand('clickElement', { 
+                text: args.selector,
+                element_type: args.element_type || 'button'
+              });
+              if (webResult.success) {
+                result = webResult;
+                addMessage('assistant', `✅ Clicked ${args.selector}`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to click element' };
+                addMessage('assistant', `❌ Error clicking ${args.selector}: ${webResult.error}`);
+              }
+            } else if (functionName === 'web_fill_form') {
+              // Web automation: Fill form
+              const webResult = await executeBrowserCommand('fillForm', { 
+                fields: args.fields
+              });
+              if (webResult.success) {
+                result = webResult;
+                addMessage('assistant', `✅ Filled form fields`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to fill form' };
+                addMessage('assistant', `❌ Error filling form: ${webResult.error}`);
+              }
+            } else if (functionName === 'web_navigate') {
+              // Web automation: Navigate
+              if (args.action === 'go_to_url' && args.url) {
+                const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (currentTab) {
+                  await chrome.tabs.update(currentTab.id, { url: args.url });
+                  result = { success: true, message: `Navigated to ${args.url}` };
+                  addMessage('assistant', `✅ Navigated to ${args.url}`);
+                } else {
+                  result = { success: false, error: 'No active tab found' };
+                }
+              } else if (args.action === 'go_back') {
+                const webResult = await executeBrowserCommand('goBack', {});
+                result = webResult;
+                addMessage('assistant', `✅ Went back`);
+              } else if (args.action === 'go_forward') {
+                const webResult = await executeBrowserCommand('goForward', {});
+                result = webResult;
+                addMessage('assistant', `✅ Went forward`);
+              } else if (args.action === 'refresh') {
+                const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (currentTab) {
+                  await chrome.tabs.reload(currentTab.id);
+                  result = { success: true, message: 'Page refreshed' };
+                  addMessage('assistant', `✅ Page refreshed`);
+                } else {
+                  result = { success: false, error: 'No active tab found' };
+                }
+              } else if (args.action === 'new_tab') {
+                await chrome.tabs.create({ active: true });
+                result = { success: true, message: 'New tab opened' };
+                addMessage('assistant', `✅ New tab opened`);
+              } else if (args.action === 'close_tab') {
+                const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (currentTab) {
+                  await chrome.tabs.remove(currentTab.id);
+                  result = { success: true, message: 'Tab closed' };
+                  addMessage('assistant', `✅ Tab closed`);
+                } else {
+                  result = { success: false, error: 'No active tab found' };
+                }
+              }
+            } else if (functionName === 'web_extract_data') {
+              // Web automation: Extract data
+              const webResult = await executeBrowserCommand('extractData', { 
+                data_type: args.data_type,
+                selector: args.selector
+              });
+              if (webResult.success) {
+                result = webResult;
+                addMessage('assistant', `✅ Extracted ${args.data_type} data`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to extract data' };
+                addMessage('assistant', `❌ Error extracting data: ${webResult.error}`);
+              }
+            } else if (functionName === 'web_scroll') {
+              // Web automation: Scroll
+              const webResult = await executeBrowserCommand('scrollPage', { 
+                direction: args.direction,
+                amount: args.amount
+              });
+              if (webResult.success) {
+                result = webResult;
+                addMessage('assistant', `✅ Scrolled ${args.direction}`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to scroll' };
+                addMessage('assistant', `❌ Error scrolling: ${webResult.error}`);
               }
             }
           } catch (error) {
@@ -781,21 +1279,66 @@ function disableMic() {
 
 // Press-to-Talk Mode
 function setupPressToTalk() {
-  els.voiceBtn.addEventListener('mousedown', () => {
+  // Remove any existing event listeners by cloning the button
+  const newVoiceBtn = els.voiceBtn.cloneNode(true);
+  els.voiceBtn.parentNode.replaceChild(newVoiceBtn, els.voiceBtn);
+  els.voiceBtn = newVoiceBtn;
+  
+  let isHolding = false;
+  let clickTimeout = null;
+
+  // Hold to talk functionality
+  els.voiceBtn.addEventListener('mousedown', (e) => {
     if (!connected || isContinuousMode) return;
+    
+    isHolding = true;
+    // Clear any pending click timeout
+    if (clickTimeout) {
+      clearTimeout(clickTimeout);
+      clickTimeout = null;
+    }
+    
     enableMic();
   });
 
   ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => {
     els.voiceBtn.addEventListener(evt, () => {
       if (!connected || isContinuousMode) return;
+      
+      isHolding = false;
       disableMic();
     });
+  });
+
+  // Click to toggle listening (pause/resume) - only if not holding
+  els.voiceBtn.addEventListener('click', (e) => {
+    if (!connected || isContinuousMode) return;
+    
+    // If we were just holding, ignore the click
+    if (isHolding) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isListening) {
+      disableMic();
+      els.voiceStatus.textContent = 'Paused - Hold to talk';
+    } else {
+      enableMic();
+      els.voiceStatus.textContent = 'Listening...';
+    }
   });
 }
 
 // Continuous Mode (Toggle)
 function setupContinuousMode() {
+  // Remove any existing event listeners by cloning the button
+  const newVoiceBtn = els.voiceBtn.cloneNode(true);
+  els.voiceBtn.parentNode.replaceChild(newVoiceBtn, els.voiceBtn);
+  els.voiceBtn = newVoiceBtn;
+  
   els.voiceBtn.addEventListener('click', (e) => {
     if (!connected || !isContinuousMode) return;
 
@@ -1411,9 +1954,8 @@ async function executeBrowserCommand(action, params) {
 els.connectBtn.addEventListener('click', async () => {
   if (!connected) {
     await connectRealtime();
-    // Close menu after connecting
-    els.settingsDropdown.classList.remove('open');
-    els.menuBtn.classList.remove('active');
+    // Close settings modal after connecting
+    closeSettingsModal();
   } else {
     teardown();
   }
@@ -1582,13 +2124,13 @@ async function checkFirstTimeUse() {
   // Check if user has seen the permission modal before
   const hasSeenModal = localStorage.getItem('atlasVoice_hasSeenPermissionModal');
 
-  if (!hasSeenModal) {
+  if (!hasSeenModal && els.permissionModal) {
     // Show the modal on first use
     els.permissionModal.classList.add('show');
   }
 }
 
-els.requestPermissionBtn.addEventListener('click', async () => {
+els.requestPermissionBtn?.addEventListener('click', async () => {
   try {
     // Request microphone permission
     await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1597,7 +2139,9 @@ els.requestPermissionBtn.addEventListener('click', async () => {
     localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
 
     // Hide modal
-    els.permissionModal.classList.remove('show');
+    if (els.permissionModal) {
+      els.permissionModal.classList.remove('show');
+    }
 
     // Update status
     els.orbStatus.textContent = 'Microphone access granted! Click Connect in menu to start';
@@ -1607,16 +2151,20 @@ els.requestPermissionBtn.addEventListener('click', async () => {
 
     // Still mark as seen so it doesn't show every time
     localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
-    els.permissionModal.classList.remove('show');
+    if (els.permissionModal) {
+      els.permissionModal.classList.remove('show');
+    }
   }
 });
 
-els.skipPermissionBtn.addEventListener('click', () => {
+els.skipPermissionBtn?.addEventListener('click', () => {
   // Mark as seen
   localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
 
   // Hide modal
-  els.permissionModal.classList.remove('show');
+  if (els.permissionModal) {
+    els.permissionModal.classList.remove('show');
+  }
 
   // Update status
   els.orbStatus.textContent = 'Click Connect in menu to start (microphone permission needed)';

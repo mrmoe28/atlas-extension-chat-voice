@@ -63,6 +63,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'keyCombination':
         handleKeyCombination(request, sendResponse);
         break;
+      case 'fillForm':
+        handleFillForm(request, sendResponse);
+        break;
+      case 'extractData':
+        handleExtractData(request, sendResponse);
+        break;
+      case 'debugElements':
+        handleDebugElements(request, sendResponse);
+        break;
       default:
         sendResponse({ error: 'Unknown action' });
     }
@@ -265,7 +274,11 @@ function findElementByTextSmart(text) {
   // Priority order for element types
   const prioritySelectors = [
     'button', 'a', 'input[type="submit"]', 'input[type="button"]',
-    '[role="button"]', '[onclick]', '.btn', '.button'
+    '[role="button"]', '[onclick]', '.btn', '.button',
+    // YouTube specific selectors
+    'ytd-video-renderer', 'ytd-compact-video-renderer', 'ytd-rich-item-renderer',
+    'h3', 'h2', 'h1', '[id*="video-title"]', '[class*="video-title"]',
+    'span[class*="title"]', 'div[class*="title"]'
   ];
   
   // First try priority elements (buttons, links, etc.)
@@ -273,33 +286,111 @@ function findElementByTextSmart(text) {
     const priorityElements = document.querySelectorAll(selector);
     for (const element of priorityElements) {
       if (elementMatchesText(element, searchText)) {
+        console.log('Found element by selector:', selector, element);
         return element;
       }
+    }
+  }
+  
+  // Try to find YouTube video elements specifically
+  if (window.location.hostname.includes('youtube.com')) {
+    const videoElements = findYouTubeVideoElements(searchText);
+    if (videoElements.length > 0) {
+      console.log('Found YouTube video elements:', videoElements);
+      return videoElements[0]; // Return first match
     }
   }
   
   // Then try all elements
   for (const element of elements) {
     if (elementMatchesText(element, searchText)) {
+      console.log('Found element by text search:', element);
       return element;
     }
   }
   
+  console.log('No element found for text:', searchText);
   return null;
+}
+
+// YouTube-specific video element finder
+function findYouTubeVideoElements(searchText) {
+  const videoElements = [];
+  
+  // Try different YouTube selectors
+  const youtubeSelectors = [
+    'ytd-video-renderer h3 a',
+    'ytd-compact-video-renderer h3 a', 
+    'ytd-rich-item-renderer h3 a',
+    'ytd-video-renderer #video-title',
+    'ytd-compact-video-renderer #video-title',
+    'ytd-rich-item-renderer #video-title',
+    'ytd-video-renderer a#video-title',
+    'ytd-compact-video-renderer a#video-title',
+    'ytd-rich-item-renderer a#video-title'
+  ];
+  
+  for (const selector of youtubeSelectors) {
+    const elements = document.querySelectorAll(selector);
+    for (const element of elements) {
+      if (elementMatchesText(element, searchText)) {
+        videoElements.push(element);
+      }
+    }
+  }
+  
+  // Also try finding by partial text match in video containers
+  const videoContainers = document.querySelectorAll('ytd-video-renderer, ytd-compact-video-renderer, ytd-rich-item-renderer');
+  for (const container of videoContainers) {
+    const titleElement = container.querySelector('h3 a, #video-title, a#video-title');
+    if (titleElement && elementMatchesText(titleElement, searchText)) {
+      videoElements.push(titleElement);
+    }
+  }
+  
+  return videoElements;
 }
 
 // Helper function to check if element matches text
 function elementMatchesText(element, searchText) {
-  // Check text content
-  if (element.textContent && element.textContent.toLowerCase().includes(searchText)) {
-    return true;
+  // Check text content with fuzzy matching
+  if (element.textContent) {
+    const elementText = element.textContent.toLowerCase().trim();
+    
+    // Exact match
+    if (elementText === searchText) {
+      return true;
+    }
+    
+    // Contains match
+    if (elementText.includes(searchText)) {
+      return true;
+    }
+    
+    // Fuzzy match for partial words
+    const searchWords = searchText.split(' ').filter(word => word.length > 2);
+    const elementWords = elementText.split(' ').filter(word => word.length > 2);
+    
+    if (searchWords.length > 0) {
+      const matchCount = searchWords.filter(searchWord => 
+        elementWords.some(elementWord => elementWord.includes(searchWord))
+      ).length;
+      
+      // If more than 50% of search words match, consider it a match
+      if (matchCount / searchWords.length >= 0.5) {
+        return true;
+      }
+    }
   }
   
   // Check attributes
   const attributes = ['title', 'alt', 'aria-label', 'placeholder', 'value'];
   for (const attr of attributes) {
-    if (element.getAttribute(attr) && element.getAttribute(attr).toLowerCase().includes(searchText)) {
-      return true;
+    if (element.getAttribute(attr)) {
+      const attrValue = element.getAttribute(attr).toLowerCase();
+      if (attrValue.includes(searchText)) {
+        return true;
+      }
     }
   }
   
@@ -593,4 +684,173 @@ function getKeyCode(key) {
   };
   
   return keyMap[key] || key.charCodeAt(0);
+}
+
+// Fill form fields
+function handleFillForm(request, sendResponse) {
+  try {
+    const { fields } = request;
+    let filledCount = 0;
+    
+    for (const [fieldName, value] of Object.entries(fields)) {
+      // Try different selectors for the field
+      const selectors = [
+        `input[name="${fieldName}"]`,
+        `input[id="${fieldName}"]`,
+        `input[placeholder*="${fieldName}"]`,
+        `textarea[name="${fieldName}"]`,
+        `textarea[id="${fieldName}"]`,
+        `select[name="${fieldName}"]`,
+        `select[id="${fieldName}"]`
+      ];
+      
+      let element = null;
+      for (const selector of selectors) {
+        element = document.querySelector(selector);
+        if (element) break;
+      }
+      
+      if (element) {
+        element.focus();
+        element.value = value;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        filledCount++;
+      }
+    }
+    
+    sendResponse({ 
+      success: true, 
+      message: `Filled ${filledCount} form fields`,
+      filledCount 
+    });
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Extract data from page
+function handleExtractData(request, sendResponse) {
+  try {
+    const { data_type, selector } = request;
+    let data = {};
+    
+    switch (data_type) {
+      case 'text':
+        if (selector) {
+          const elements = document.querySelectorAll(selector);
+          data.text = Array.from(elements).map(el => el.textContent.trim());
+        } else {
+          data.text = document.body.textContent.trim();
+        }
+        break;
+        
+      case 'links':
+        const links = document.querySelectorAll('a[href]');
+        data.links = Array.from(links).map(link => ({
+          text: link.textContent.trim(),
+          href: link.href
+        }));
+        break;
+        
+      case 'images':
+        const images = document.querySelectorAll('img[src]');
+        data.images = Array.from(images).map(img => ({
+          src: img.src,
+          alt: img.alt,
+          title: img.title
+        }));
+        break;
+        
+      case 'forms':
+        const forms = document.querySelectorAll('form');
+        data.forms = Array.from(forms).map(form => {
+          const inputs = form.querySelectorAll('input, textarea, select');
+          return {
+            action: form.action,
+            method: form.method,
+            fields: Array.from(inputs).map(input => ({
+              name: input.name,
+              type: input.type,
+              placeholder: input.placeholder,
+              value: input.value
+            }))
+          };
+        });
+        break;
+        
+      case 'tables':
+        const tables = document.querySelectorAll('table');
+        data.tables = Array.from(tables).map(table => {
+          const rows = table.querySelectorAll('tr');
+          return Array.from(rows).map(row => {
+            const cells = row.querySelectorAll('td, th');
+            return Array.from(cells).map(cell => cell.textContent.trim());
+          });
+        });
+        break;
+        
+      case 'all':
+        data = {
+          title: document.title,
+          url: window.location.href,
+          text: document.body.textContent.trim(),
+          links: Array.from(document.querySelectorAll('a[href]')).map(link => ({
+            text: link.textContent.trim(),
+            href: link.href
+          })),
+          images: Array.from(document.querySelectorAll('img[src]')).map(img => ({
+            src: img.src,
+            alt: img.alt
+          }))
+        };
+        break;
+        
+      default:
+        sendResponse({ error: 'Invalid data type' });
+        return;
+    }
+    
+    sendResponse({ success: true, data });
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+// Debug elements on page
+function handleDebugElements(request, sendResponse) {
+  try {
+    const { text } = request;
+    const searchText = text.toLowerCase().trim();
+    
+    // Find all potential matches
+    const allElements = document.querySelectorAll('*');
+    const matches = [];
+    
+    for (const element of allElements) {
+      if (element.textContent && element.textContent.toLowerCase().includes(searchText)) {
+        const rect = element.getBoundingClientRect();
+        matches.push({
+          tagName: element.tagName,
+          text: element.textContent.trim().substring(0, 100),
+          id: element.id,
+          className: element.className,
+          position: { x: rect.left, y: rect.top },
+          size: { width: rect.width, height: rect.height },
+          visible: rect.width > 0 && rect.height > 0
+        });
+      }
+    }
+    
+    sendResponse({ 
+      success: true, 
+      data: {
+        searchText,
+        totalMatches: matches.length,
+        matches: matches.slice(0, 10) // Limit to first 10 matches
+      }
+    });
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
 }

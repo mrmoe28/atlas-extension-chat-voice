@@ -6,8 +6,9 @@
   --text-muted: #8b8d94;
   --brand: #4aa3ff;
   --brand-hover: #3a93ef;
-  --user-bubble: #2d5bf5;
-  --ai-bubble: #7c3aed; /* Purple for AI */
+  --user-bubble: #2d5bf5; /* Blue for user */
+  --ai-bubble-start: #8b5cf6; /* Vibrant purple for AI */
+  --ai-bubble-end: #a855f7; /* Lighter purple gradient */
   --border: #2a2d38;
   --success: #10b981;
   --error: #ef4444;
@@ -391,8 +392,17 @@ h1 {
   padding-bottom: 0;
 }
 
+/* Content Area */
+.content-area {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Large Centered Voice Orb */
-.voice-orb-wrapper {
+.orb-container {
   position: absolute;
   top: 0;
   left: 0;
@@ -409,7 +419,7 @@ h1 {
   visibility: visible !important;
 }
 
-.voice-orb-wrapper.hidden {
+.orb-container.hidden {
   opacity: 0 !important;
   pointer-events: none;
   display: none !important;
@@ -596,8 +606,9 @@ h1 {
 }
 
 .message.assistant .message-avatar {
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--ai-bubble-start) 0%, var(--ai-bubble-end) 100%);
   color: white;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
 }
 
 .message-content {
@@ -615,9 +626,116 @@ h1 {
 }
 
 .message.assistant .message-content {
-  background: var(--ai-bubble);
+  background: linear-gradient(135deg, var(--ai-bubble-start) 0%, var(--ai-bubble-end) 100%);
   color: white;
   border-bottom-left-radius: 4px;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  position: relative;
+}
+
+/* Copy Button for Atlas Messages */
+.message.assistant .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.message.assistant:hover .copy-btn {
+  opacity: 1;
+}
+
+.message.assistant .copy-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.message.assistant .copy-btn:active {
+  transform: scale(0.95);
+}
+
+.message.assistant .copy-btn.copied {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+/* Prompt Block Styling */
+.prompt-block {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  position: relative;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.prompt-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.prompt-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.8;
+}
+
+.prompt-copy-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.prompt-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.prompt-copy-btn:active {
+  transform: scale(0.95);
+}
+
+.prompt-copy-btn.copied {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.prompt-content {
+  color: rgba(255, 255, 255, 0.95);
 }
 
 /* Typing Indicator */
