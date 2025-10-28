@@ -391,8 +391,17 @@ h1 {
   padding-bottom: 0;
 }
 
+/* Content Area */
+.content-area {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Large Centered Voice Orb */
-.voice-orb-wrapper {
+.orb-container {
   position: absolute;
   top: 0;
   left: 0;
@@ -409,7 +418,7 @@ h1 {
   visibility: visible !important;
 }
 
-.voice-orb-wrapper.hidden {
+.orb-container.hidden {
   opacity: 0 !important;
   pointer-events: none;
   display: none !important;
