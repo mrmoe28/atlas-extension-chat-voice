@@ -420,6 +420,26 @@ async function connectRealtime() {
       throw new Error('Server URL is required. Please enter a server URL in settings.');
     }
     
+    // Clean up any existing connection first
+    if (pc) {
+      console.log('🧹 Cleaning up existing connection...');
+      try {
+        pc.close();
+      } catch (e) {
+        console.warn('Error closing existing connection:', e);
+      }
+      pc = null;
+    }
+    
+    if (dataChannel) {
+      try {
+        dataChannel.close();
+      } catch (e) {
+        console.warn('Error closing existing data channel:', e);
+      }
+      dataChannel = null;
+    }
+    
     els.orbStatus.textContent = 'Connecting...';
     
     // Use MicPermission for microphone access
@@ -438,7 +458,18 @@ async function connectRealtime() {
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
     console.log('✅ Ephemeral token received');
 
+    // Create new peer connection
     pc = new RTCPeerConnection();
+    
+    // Add connection state change handler
+    pc.onconnectionstatechange = () => {
+      console.log('🔗 Connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.log('❌ Connection failed or disconnected');
+        teardown();
+      }
+    };
+    
     for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
 
     createRemoteAudio();
