@@ -18,6 +18,9 @@ build/
 *.log
 *.tgz
 
+# Extension packaging
+atlas-voice-extension.zip
+
 # OS files
 .DS_Store
 Thumbs.db

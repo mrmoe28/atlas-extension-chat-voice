@@ -1,10 +1,14 @@
 {
-  "name": "atlas-voice-server",
+  "name": "atlas-voice-extension",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "scripts": {
-    "dev": "node server.js"
+    "dev": "node server/server.js",
+    "build": "node scripts/build-extension.js",
+    "build:zip": "npm run build && cd dist && zip -r ../atlas-voice-extension.zip .",
+    "release": "node scripts/create-release.js",
+    "test": "playwright test"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

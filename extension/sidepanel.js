@@ -360,7 +360,7 @@ function updateOrbState() {
   }
 }
 
-function addMessage(role, content) {
+function addMessage(role, content, messageType = 'text') {
   if (!content || content.trim() === '') return;
 
   // Hide orb, show chat
@@ -369,6 +369,9 @@ function addMessage(role, content) {
 
   const messageEl = document.createElement('div');
   messageEl.className = `message ${role}`;
+  if (messageType !== 'text') {
+    messageEl.classList.add(`message-${messageType}`);
+  }
 
   const avatar = document.createElement('div');
   avatar.className = 'message-avatar';
@@ -376,13 +379,120 @@ function addMessage(role, content) {
 
   const contentEl = document.createElement('div');
   contentEl.className = 'message-content';
-  contentEl.textContent = content;
+  
+  // Check if content contains a prompt or code block
+  if (messageType === 'prompt' || content.includes('```') || content.includes('PROMPT:')) {
+    contentEl.innerHTML = formatPromptMessage(content);
+  } else {
+    contentEl.textContent = content;
+  }
+
+  // Add copy button for Atlas messages
+  if (role === 'assistant') {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      Copy
+    `;
+    copyBtn.onclick = () => copyMessageContent(content, copyBtn);
+    
+    const messageActions = document.createElement('div');
+    messageActions.className = 'message-actions';
+    messageActions.appendChild(copyBtn);
+    messageEl.appendChild(messageActions);
+  }
 
   messageEl.appendChild(avatar);
   messageEl.appendChild(contentEl);
 
   els.chatContainer.appendChild(messageEl);
   els.chatContainer.scrollTop = els.chatContainer.scrollHeight;
+}
+
+function formatPromptMessage(content) {
+  // Format different types of prompts and code blocks
+  let formatted = content;
+  
+  // Handle PROMPT: prefix
+  if (content.includes('PROMPT:')) {
+    formatted = content.replace(/PROMPT:\s*/g, '<div class="prompt-header">💡 Claude Prompt</div>');
+  }
+  
+  // Handle code blocks
+  formatted = formatted.replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, lang, code) => {
+    const language = lang || 'text';
+    return `
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">${language}</span>
+          <button class="code-copy-btn" onclick="copyCodeBlock(this, \`${code.replace(/`/g, '\\`')}\`)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy
+          </button>
+        </div>
+        <pre><code class="language-${language}">${escapeHTML(code)}</code></pre>
+      </div>
+    `;
+  });
+  
+  // Convert newlines to <br> for HTML display
+  formatted = formatted.replace(/\n/g, '<br>');
+  
+  return formatted;
+}
+
+function escapeHTML(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function copyMessageContent(content, button) {
+  navigator.clipboard.writeText(content).then(() => {
+    const originalHTML = button.innerHTML;
+    button.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20,6 9,17 4,12"></polyline>
+      </svg>
+      Copied!
+    `;
+    button.classList.add('copied');
+    
+    setTimeout(() => {
+      button.innerHTML = originalHTML;
+      button.classList.remove('copied');
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy text: ', err);
+    button.textContent = 'Failed to copy';
+  });
+}
+
+function copyCodeBlock(button, code) {
+  navigator.clipboard.writeText(code).then(() => {
+    const originalHTML = button.innerHTML;
+    button.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20,6 9,17 4,12"></polyline>
+      </svg>
+      Copied!
+    `;
+    button.classList.add('copied');
+    
+    setTimeout(() => {
+      button.innerHTML = originalHTML;
+      button.classList.remove('copied');
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy code: ', err);
+  });
 }
 
 function showTypingIndicator() {
@@ -482,13 +592,21 @@ async function connectRealtime() {
 
       // Configure session with desktop commander instructions if enabled
       const instructions = isDesktopMode
-        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander and Web Automation capabilities.
+        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander, Web Automation, and Prompt Generation capabilities.
 
 🎯 CAPABILITIES:
 - Desktop Commander: Full system control (files, apps, system settings)
 - Web Automation: Browser control, form filling, element interaction
 - Voice Control: Natural language commands
 - Screen Vision: Can see and analyze your screen
+- Prompt Generation: Create optimized prompts for Claude coding tasks
+
+💡 PROMPT GENERATION FEATURES:
+- Create structured prompts for Claude code assistant
+- Generate debugging prompts for troubleshooting code issues
+- Create code review prompts for optimization suggestions
+- Format prompts with proper context and requirements
+- Display prompts with copy functionality in chat
 
 🖥️ DESKTOP COMMANDER COMMANDS:
 File Operations: OPEN_FOLDER, CREATE_FILE, CREATE_FOLDER, DELETE_FILE, RENAME_FILE, COPY_FILE, MOVE_FILE
@@ -512,11 +630,21 @@ Information: GET_TIME, GET_DATE, SEARCH_WEB, SEARCH_YOUTUBE, SEARCH_WIKIPEDIA
 📝 RESPONSE FORMAT:
 For Desktop Commands: "Action description. [CMD:COMMAND_TYPE:parameter]"
 For Web Automation: "Web action description. [WEB:action:details]"
+For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
 For General Help: Provide helpful, conversational responses
 
 Examples:
 User: "Open my downloads folder"
 You: "Opening Downloads folder. [CMD:OPEN_FOLDER:~/Downloads]"
+
+User: "Create a prompt for building a React component"
+You: Use create_claude_prompt function with appropriate parameters
+
+User: "Help me debug this JavaScript error"  
+You: Use create_debugging_prompt function with error details
+
+User: "Review my Python code for improvements"
+You: Use create_code_review_prompt function with the code
 
 User: "Fill out the contact form with my email"
 You: "Filling contact form. [WEB:fill_form:email=user@example.com]"
@@ -530,11 +658,19 @@ You: "Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
 User: "Search for 'artificial intelligence' on Google"
 You: "Searching Google. [CMD:SEARCH_WEB:artificial intelligence]"
 
-User: "Open YouTube and search for music"
-You: "Opening YouTube. [CMD:SEARCH_YOUTUBE:music]"
+Be helpful, concise, and always confirm actions taken. When creating prompts, use the appropriate function tools to generate properly formatted prompts that will be displayed in the chat with copy functionality.`
+        : `You are Atlas Voice, a helpful AI assistant with web automation and prompt generation capabilities.
 
-Be helpful, concise, and always confirm actions taken.`
-        : `You are Atlas Voice, a helpful AI assistant with web automation capabilities.
+🎯 CAPABILITIES:
+- Web Automation: Browser control, form filling, element interaction
+- Prompt Generation: Create optimized prompts for Claude coding tasks
+
+💡 PROMPT GENERATION FEATURES:
+- Create structured prompts for Claude code assistant
+- Generate debugging prompts for troubleshooting code issues
+- Create code review prompts for optimization suggestions
+- Format prompts with proper context and requirements
+- Display prompts with copy functionality in chat
 
 🌐 WEB AUTOMATION FEATURES:
 - Fill forms automatically
@@ -547,9 +683,19 @@ Be helpful, concise, and always confirm actions taken.`
 
 📝 RESPONSE FORMAT:
 For Web Actions: "Action description. [WEB:action:details]"
+For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
 For General Help: Provide helpful, conversational responses
 
 Examples:
+User: "Create a prompt for building a React component"
+You: Use create_claude_prompt function with appropriate parameters
+
+User: "Help me debug this JavaScript error"
+You: Use create_debugging_prompt function with error details
+
+User: "Review my Python code for improvements"  
+You: Use create_code_review_prompt function with the code
+
 User: "Fill out the contact form"
 You: "Filling contact form. [WEB:fill_form:name=John,email=john@example.com]"
 
@@ -559,10 +705,90 @@ You: "Clicking search button. [WEB:click_element:search]"
 User: "Take a screenshot"
 You: "Taking screenshot. [WEB:screenshot:]"
 
-Be helpful and conversational.`;
+Be helpful and conversational. When creating prompts, use the appropriate function tools to generate properly formatted prompts that will be displayed in the chat with copy functionality.`;
 
-      // Define tools for function calling
+        // Define tools for function calling
       const tools = isDesktopMode ? [
+        // Prompt Generation Tools
+        {
+          type: 'function',
+          name: 'create_claude_prompt',
+          description: 'Creates a formatted prompt for Claude code assistant with specific instructions and context.',
+          parameters: {
+            type: 'object',
+            properties: {
+              task_description: {
+                type: 'string',
+                description: 'Clear description of what the user wants to accomplish'
+              },
+              context: {
+                type: 'string',
+                description: 'Additional context about the project, technologies, or constraints'
+              },
+              specific_requirements: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'List of specific requirements or constraints'
+              },
+              output_format: {
+                type: 'string',
+                description: 'Desired output format (code, explanation, step-by-step, etc.)'
+              }
+            },
+            required: ['task_description']
+          }
+        },
+        {
+          type: 'function',
+          name: 'create_debugging_prompt',
+          description: 'Creates a specialized prompt for debugging code issues.',
+          parameters: {
+            type: 'object',
+            properties: {
+              error_description: {
+                type: 'string',
+                description: 'Description of the error or issue'
+              },
+              code_snippet: {
+                type: 'string',
+                description: 'The problematic code (if available)'
+              },
+              expected_behavior: {
+                type: 'string',
+                description: 'What should happen instead'
+              },
+              tech_stack: {
+                type: 'string',
+                description: 'Technologies involved (programming language, framework, etc.)'
+              }
+            },
+            required: ['error_description']
+          }
+        },
+        {
+          type: 'function',
+          name: 'create_code_review_prompt',
+          description: 'Creates a prompt for code review and optimization suggestions.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code_to_review: {
+                type: 'string',
+                description: 'The code that needs to be reviewed'
+              },
+              review_focus: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Areas to focus on (performance, security, readability, best practices, etc.)'
+              },
+              programming_language: {
+                type: 'string',
+                description: 'The programming language of the code'
+              }
+            },
+            required: ['code_to_review']
+          }
+        },
         // Desktop Commander Tools
         {
           type: 'function',
@@ -728,6 +954,86 @@ Be helpful and conversational.`;
           }
         }
       ] : [
+        // Prompt Generation Tools (available in both modes)
+        {
+          type: 'function',
+          name: 'create_claude_prompt',
+          description: 'Creates a formatted prompt for Claude code assistant with specific instructions and context.',
+          parameters: {
+            type: 'object',
+            properties: {
+              task_description: {
+                type: 'string',
+                description: 'Clear description of what the user wants to accomplish'
+              },
+              context: {
+                type: 'string',
+                description: 'Additional context about the project, technologies, or constraints'
+              },
+              specific_requirements: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'List of specific requirements or constraints'
+              },
+              output_format: {
+                type: 'string',
+                description: 'Desired output format (code, explanation, step-by-step, etc.)'
+              }
+            },
+            required: ['task_description']
+          }
+        },
+        {
+          type: 'function',
+          name: 'create_debugging_prompt',
+          description: 'Creates a specialized prompt for debugging code issues.',
+          parameters: {
+            type: 'object',
+            properties: {
+              error_description: {
+                type: 'string',
+                description: 'Description of the error or issue'
+              },
+              code_snippet: {
+                type: 'string',
+                description: 'The problematic code (if available)'
+              },
+              expected_behavior: {
+                type: 'string',
+                description: 'What should happen instead'
+              },
+              tech_stack: {
+                type: 'string',
+                description: 'Technologies involved (programming language, framework, etc.)'
+              }
+            },
+            required: ['error_description']
+          }
+        },
+        {
+          type: 'function',
+          name: 'create_code_review_prompt',
+          description: 'Creates a prompt for code review and optimization suggestions.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code_to_review: {
+                type: 'string',
+                description: 'The code that needs to be reviewed'
+              },
+              review_focus: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Areas to focus on (performance, security, readability, best practices, etc.)'
+              },
+              programming_language: {
+                type: 'string',
+                description: 'The programming language of the code'
+              }
+            },
+            required: ['code_to_review']
+          }
+        },
         // Web Automation Tools (available in both modes)
         {
           type: 'function',
@@ -872,7 +1178,19 @@ IMPORTANT:
           let result = { success: false, error: 'Unknown function' };
 
           try {
-            if (functionName === 'open_webpage') {
+            if (functionName === 'create_claude_prompt') {
+              const prompt = generateClaudePrompt(args);
+              addMessage('assistant', prompt, 'prompt');
+              result = { success: true, message: 'Claude prompt created and displayed in chat' };
+            } else if (functionName === 'create_debugging_prompt') {
+              const debugPrompt = generateDebuggingPrompt(args);
+              addMessage('assistant', debugPrompt, 'prompt');
+              result = { success: true, message: 'Debugging prompt created and displayed in chat' };
+            } else if (functionName === 'create_code_review_prompt') {
+              const reviewPrompt = generateCodeReviewPrompt(args);
+              addMessage('assistant', reviewPrompt, 'prompt');
+              result = { success: true, message: 'Code review prompt created and displayed in chat' };
+            } else if (functionName === 'open_webpage') {
               let url = args.url;
               // If no protocol, check if it's a search query or URL
               if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -2592,6 +2910,93 @@ setupContinuousMode();
 webSpeechFallbackSetup();
 updateOrbState();
 checkFirstTimeUse();
+
+// Prompt Generation Functions
+function generateClaudePrompt(args) {
+  const { task_description, context, specific_requirements, output_format } = args;
+  
+  let prompt = `**PROMPT FOR CLAUDE:**\n\n`;
+  prompt += `**Task:** ${task_description}\n\n`;
+  
+  if (context) {
+    prompt += `**Context:** ${context}\n\n`;
+  }
+  
+  if (specific_requirements && specific_requirements.length > 0) {
+    prompt += `**Requirements:**\n`;
+    specific_requirements.forEach((req, index) => {
+      prompt += `${index + 1}. ${req}\n`;
+    });
+    prompt += `\n`;
+  }
+  
+  if (output_format) {
+    prompt += `**Output Format:** ${output_format}\n\n`;
+  }
+  
+  prompt += `Please provide a detailed solution with clear explanations and well-commented code where applicable.`;
+  
+  return prompt;
+}
+
+function generateDebuggingPrompt(args) {
+  const { error_description, code_snippet, expected_behavior, tech_stack } = args;
+  
+  let prompt = `**DEBUGGING PROMPT FOR CLAUDE:**\n\n`;
+  prompt += `**Issue:** ${error_description}\n\n`;
+  
+  if (tech_stack) {
+    prompt += `**Technology Stack:** ${tech_stack}\n\n`;
+  }
+  
+  if (code_snippet) {
+    prompt += `**Code with Issue:**\n`;
+    prompt += `\`\`\`\n${code_snippet}\n\`\`\`\n\n`;
+  }
+  
+  if (expected_behavior) {
+    prompt += `**Expected Behavior:** ${expected_behavior}\n\n`;
+  }
+  
+  prompt += `Please analyze the issue and provide:\n`;
+  prompt += `1. Root cause analysis\n`;
+  prompt += `2. Step-by-step debugging approach\n`;
+  prompt += `3. Fixed code with explanations\n`;
+  prompt += `4. Prevention strategies for similar issues`;
+  
+  return prompt;
+}
+
+function generateCodeReviewPrompt(args) {
+  const { code_to_review, review_focus, programming_language } = args;
+  
+  let prompt = `**CODE REVIEW PROMPT FOR CLAUDE:**\n\n`;
+  
+  if (programming_language) {
+    prompt += `**Language:** ${programming_language}\n\n`;
+  }
+  
+  prompt += `**Code to Review:**\n`;
+  prompt += `\`\`\`${programming_language || ''}\n${code_to_review}\n\`\`\`\n\n`;
+  
+  if (review_focus && review_focus.length > 0) {
+    prompt += `**Focus Areas:**\n`;
+    review_focus.forEach((focus, index) => {
+      prompt += `${index + 1}. ${focus}\n`;
+    });
+    prompt += `\n`;
+  }
+  
+  prompt += `Please provide a comprehensive code review including:\n`;
+  prompt += `1. Overall code quality assessment\n`;
+  prompt += `2. Specific improvements and optimizations\n`;
+  prompt += `3. Best practices recommendations\n`;
+  prompt += `4. Security considerations (if applicable)\n`;
+  prompt += `5. Performance optimization suggestions\n`;
+  prompt += `6. Refactored code examples where beneficial`;
+  
+  return prompt;
+}
 
 // Initialize Browser View (temporarily disabled to fix Atlas functionality)
 // BrowserView.init();
