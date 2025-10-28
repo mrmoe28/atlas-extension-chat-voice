@@ -1208,6 +1208,21 @@ IMPORTANT:
 
         if (msg.type === 'response.audio.start' || msg.type === 'response.audio_transcript.start') {
           showTypingIndicator();
+          currentAIMessage = ''; // Reset for new audio response
+        }
+
+        // Handle AI audio transcript (voice responses)
+        if (msg.type === 'response.audio_transcript.delta') {
+          currentAIMessage += msg.delta || '';
+        }
+
+        if (msg.type === 'response.audio_transcript.done') {
+          if (currentAIMessage || msg.transcript) {
+            const transcript = msg.transcript || currentAIMessage;
+            removeTypingIndicator();
+            addMessage('assistant', transcript);
+            currentAIMessage = '';
+          }
         }
       } catch (err) {
         console.log('DC message:', e.data);
