@@ -4,7 +4,9 @@
 
 const els = {
   menuBtn: document.getElementById('menuBtn'),
-  settingsDropdown: document.getElementById('settingsDropdown'),
+  settingsModal: document.getElementById('settingsModal'),
+  settingsBackdrop: document.getElementById('settingsBackdrop'),
+  settingsClose: document.getElementById('settingsClose'),
   serverUrl: document.getElementById('serverUrl'),
   connectBtn: document.getElementById('connectBtn'),
   statusDot: document.getElementById('statusDot'),
@@ -46,10 +48,135 @@ let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
 
+// Settings Modal Management
+let isModalOpen = false;
+let previousActiveElement = null;
+
+// Open settings modal
+function openSettingsModal() {
+  if (isModalOpen) return;
+  
+  isModalOpen = true;
+  previousActiveElement = document.activeElement;
+  
+  // Add open class with slight delay for smooth animation
+  els.settingsModal.classList.add('open');
+  els.menuBtn.classList.add('active');
+  
+  // Set ARIA attributes
+  els.settingsModal.setAttribute('aria-hidden', 'false');
+  
+  // Focus management - focus the close button
+  setTimeout(() => {
+    els.settingsClose.focus();
+  }, 100);
+  
+  // Prevent body scroll when modal is open
+  document.body.style.overflow = 'hidden';
+  
+  console.log('🔧 Settings modal opened');
+}
+
+// Close settings modal
+function closeSettingsModal() {
+  if (!isModalOpen) return;
+  
+  isModalOpen = false;
+  
+  // Remove open class
+  els.settingsModal.classList.remove('open');
+  els.menuBtn.classList.remove('active');
+  
+  // Set ARIA attributes
+  els.settingsModal.setAttribute('aria-hidden', 'true');
+  
+  // Restore focus to previous element
+  if (previousActiveElement) {
+    previousActiveElement.focus();
+    previousActiveElement = null;
+  }
+  
+  // Restore body scroll
+  document.body.style.overflow = '';
+  
+  console.log('🔧 Settings modal closed');
+}
+
 // Hamburger menu toggle
-els.menuBtn.addEventListener('click', () => {
-  document.querySelector('.settings-dropdown').classList.toggle('open');
-  els.menuBtn.classList.toggle('active');
+els.menuBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (isModalOpen) {
+    closeSettingsModal();
+  } else {
+    openSettingsModal();
+  }
+});
+
+// Close modal when clicking backdrop
+els.settingsBackdrop.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  closeSettingsModal();
+});
+
+// Close modal when clicking close button
+els.settingsClose.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  closeSettingsModal();
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isModalOpen) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSettingsModal();
+  }
+});
+
+// Trap focus within modal when open
+document.addEventListener('keydown', (e) => {
+  if (!isModalOpen) return;
+  
+  if (e.key === 'Tab') {
+    const focusableElements = els.settingsModal.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    
+    if (e.shiftKey) {
+      if (document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement.focus();
+      }
+    } else {
+      if (document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement.focus();
+      }
+    }
+  }
+});
+
+// Prevent modal from closing when clicking inside modal content
+els.settingsModal.addEventListener('click', (e) => {
+  if (e.target === els.settingsModal) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSettingsModal();
+  }
+});
+
+// Handle window resize to maintain modal positioning
+window.addEventListener('resize', () => {
+  if (isModalOpen) {
+    // Ensure modal stays centered on resize
+    els.settingsModal.style.display = 'flex';
+  }
 });
 
 async function getEphemeralToken(serverBase) {
