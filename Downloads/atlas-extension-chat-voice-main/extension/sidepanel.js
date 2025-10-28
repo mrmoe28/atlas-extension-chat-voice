@@ -575,12 +575,35 @@ async function connectRealtime() {
       const instructions = isDesktopMode
         ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander and Web Automation capabilities.
 
+⚡ CORE BEHAVIOR RULES (CRITICAL - READ FIRST):
+1. EXECUTE IMMEDIATELY - Don't ask clarifying questions unless absolutely necessary
+2. MAKE SMART ASSUMPTIONS - Use context from conversation and common sense
+3. USE SENSIBLE DEFAULTS - Timestamp filenames, save to Desktop, use appropriate formats
+4. ONLY ASK IF IMPOSSIBLE - If you genuinely cannot complete the task without input, ask ONE specific question
+5. ANALYZE ATTACHED FILES - When user attaches files (PDFs, images, documents), examine them thoroughly and extract all relevant information
+6. FILL FORMS AUTOMATICALLY - When user asks to review contracts or fill forms, extract data from attachments and complete the task
+
+Examples of GOOD vs BAD behavior:
+❌ BAD: "What should I name the file?"
+✅ GOOD: *Creates file with timestamp name and saves to Desktop*
+
+❌ BAD: "What format would you like?"
+✅ GOOD: *Chooses PDF for documents, TXT for code, based on content type*
+
+❌ BAD: "Could you tell me what this file contains?"
+✅ GOOD: *Analyzes the attached PDF/image and extracts information automatically*
+
+❌ BAD: "Please share the contract file with me"
+✅ GOOD: *Reviews the already-attached contract and provides analysis*
+
 🎯 CAPABILITIES:
 - Desktop Commander: Full system control (files, apps, system settings)
 - Web Automation: Browser control, form filling, element interaction
 - Voice Control: Natural language commands
 - Screen Vision: Can see and analyze your screen
 - Prompt Generation: Create copyable prompts for the user
+- Document Analysis: Extract and analyze content from PDFs, images, and documents
+- Form Filling: Automatically fill forms using extracted data
 
 📝 CREATING PROMPTS:
 To create a copyable prompt block that the user can easily copy and paste, use this syntax:
@@ -654,6 +677,27 @@ You: "Opening YouTube. [CMD:SEARCH_YOUTUBE:music]"
 
 Be helpful, concise, and always confirm actions taken.`
         : `You are Atlas Voice, a helpful AI assistant with web automation capabilities.
+
+⚡ CORE BEHAVIOR RULES (CRITICAL - READ FIRST):
+1. EXECUTE IMMEDIATELY - Don't ask clarifying questions unless absolutely necessary
+2. MAKE SMART ASSUMPTIONS - Use context from conversation and common sense
+3. USE SENSIBLE DEFAULTS - Timestamp filenames, appropriate formats, Desktop location
+4. ONLY ASK IF IMPOSSIBLE - If you genuinely cannot complete the task without input, ask ONE specific question
+5. ANALYZE ATTACHED FILES - When user attaches files (PDFs, images, documents), examine them and extract information
+6. FILL FORMS AUTOMATICALLY - Extract data from attachments and complete forms when asked
+
+Examples of GOOD vs BAD behavior:
+❌ BAD: "What should I name the file?"
+✅ GOOD: *Creates file with timestamp name*
+
+❌ BAD: "What format would you like?"
+✅ GOOD: *Uses PDF for documents, TXT for plain text*
+
+❌ BAD: "Could you clarify what this file contains?"
+✅ GOOD: *Analyzes attached file and provides summary*
+
+❌ BAD: "Please share the file with me"
+✅ GOOD: *Reviews already-attached file immediately*
 
 🌐 WEB AUTOMATION FEATURES:
 - Fill forms automatically
@@ -2622,20 +2666,6 @@ async function sendTextMessage() {
 
   if (!text && attachedFiles.length === 0) return;
 
-  // Build message with attachments
-  let message = text;
-
-  if (attachedFiles.length > 0) {
-    message += '\n\n📎 Attached files:\n';
-    attachedFiles.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        message += `\n[Image: ${file.name}]\n${file.data}`;
-      } else {
-        message += `\n[Document: ${file.name}]\n${file.data}`;
-      }
-    });
-  }
-
   // Show user message
   if (text) {
     addMessage('user', text);
@@ -2645,20 +2675,65 @@ async function sendTextMessage() {
   attachedFiles.forEach(file => {
     if (file.type.startsWith('image/')) {
       addMessage('user', `<img src="${file.data}" style="max-width: 300px; border-radius: 8px;" alt="${file.name}">`);
+    } else {
+      addMessage('user', `📄 ${file.name} (${formatFileSize(file.size)})`);
     }
   });
 
   // Send via data channel if connected
   if (dataChannel && dataChannel.readyState === 'open') {
+    // Build content array with text and files
+    const contentItems = [];
+
+    // Add text content
+    if (text) {
+      contentItems.push({
+        type: 'input_text',
+        text: text
+      });
+    }
+
+    // Process attached files
+    for (const file of attachedFiles) {
+      if (file.type.startsWith('image/')) {
+        // For images, send as base64 with vision
+        const base64Data = file.data.split(',')[1]; // Remove data:image/...;base64, prefix
+        contentItems.push({
+          type: 'input_text',
+          text: `[Analyzing image: ${file.name}]\nImage data (base64): ${file.data}`
+        });
+      } else if (file.type === 'application/pdf') {
+        // For PDFs, extract text and send
+        try {
+          const pdfText = await extractPDFText(file.data);
+          contentItems.push({
+            type: 'input_text',
+            text: `📄 Content from ${file.name}:\n\n${pdfText}`
+          });
+        } catch (err) {
+          console.error('PDF extraction failed:', err);
+          contentItems.push({
+            type: 'input_text',
+            text: `📄 ${file.name} (PDF file attached but text extraction failed)`
+          });
+        }
+      } else {
+        // For text files, send content directly
+        const textContent = file.data;
+        contentItems.push({
+          type: 'input_text',
+          text: `📄 Content from ${file.name}:\n\n${textContent}`
+        });
+      }
+    }
+
+    // Send the message with all content
     dataChannel.send(JSON.stringify({
       type: 'conversation.item.create',
       item: {
         type: 'message',
         role: 'user',
-        content: [{
-          type: 'input_text',
-          text: message
-        }]
+        content: contentItems
       }
     }));
 
@@ -2670,6 +2745,33 @@ async function sendTextMessage() {
   attachedFiles = [];
   els.attachedFiles.innerHTML = '';
   updateSendButtonState();
+}
+
+// Extract text from PDF (basic implementation)
+async function extractPDFText(dataUrl) {
+  // For now, we'll use a simple approach
+  // TODO: Add proper PDF.js integration for better extraction
+
+  try {
+    // If it's a data URL, convert to blob
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const text = new TextDecoder().decode(arrayBuffer);
+
+    // Basic PDF text extraction (looks for readable text between stream markers)
+    const pdfText = text.match(/stream\s*([\s\S]*?)\s*endstream/g);
+    if (pdfText) {
+      return pdfText.map(t => {
+        return t.replace(/stream\s*/, '').replace(/\s*endstream/, '');
+      }).join('\n').replace(/[^\x20-\x7E\n]/g, '');
+    }
+
+    return "PDF content detected but text extraction requires PDF.js library. File size: " + blob.size + " bytes";
+  } catch (err) {
+    console.error('PDF extraction error:', err);
+    return "Unable to extract PDF text";
+  }
 }
 
 // Show input box when connected
