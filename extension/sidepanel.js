@@ -1803,9 +1803,8 @@ async function executeBrowserCommand(action, params) {
 els.connectBtn.addEventListener('click', async () => {
   if (!connected) {
     await connectRealtime();
-    // Close menu after connecting
-    document.querySelector('.settings-dropdown').classList.remove('open');
-    els.menuBtn.classList.remove('active');
+    // Close settings modal after connecting
+    closeSettingsModal();
   } else {
     teardown();
   }
@@ -1974,13 +1973,13 @@ async function checkFirstTimeUse() {
   // Check if user has seen the permission modal before
   const hasSeenModal = localStorage.getItem('atlasVoice_hasSeenPermissionModal');
 
-  if (!hasSeenModal) {
+  if (!hasSeenModal && els.permissionModal) {
     // Show the modal on first use
     els.permissionModal.classList.add('show');
   }
 }
 
-els.requestPermissionBtn.addEventListener('click', async () => {
+els.requestPermissionBtn?.addEventListener('click', async () => {
   try {
     // Request microphone permission
     await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1989,7 +1988,9 @@ els.requestPermissionBtn.addEventListener('click', async () => {
     localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
 
     // Hide modal
-    els.permissionModal.classList.remove('show');
+    if (els.permissionModal) {
+      els.permissionModal.classList.remove('show');
+    }
 
     // Update status
     els.orbStatus.textContent = 'Microphone access granted! Click Connect in menu to start';
@@ -1999,16 +2000,20 @@ els.requestPermissionBtn.addEventListener('click', async () => {
 
     // Still mark as seen so it doesn't show every time
     localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
-    els.permissionModal.classList.remove('show');
+    if (els.permissionModal) {
+      els.permissionModal.classList.remove('show');
+    }
   }
 });
 
-els.skipPermissionBtn.addEventListener('click', () => {
+els.skipPermissionBtn?.addEventListener('click', () => {
   // Mark as seen
   localStorage.setItem('atlasVoice_hasSeenPermissionModal', 'true');
 
   // Hide modal
-  els.permissionModal.classList.remove('show');
+  if (els.permissionModal) {
+    els.permissionModal.classList.remove('show');
+  }
 
   // Update status
   els.orbStatus.textContent = 'Click Connect in menu to start (microphone permission needed)';
