@@ -2562,5 +2562,5 @@ webSpeechFallbackSetup();
 updateOrbState();
 checkFirstTimeUse();
 
-// Initialize Browser View
-BrowserView.init();
+// Initialize Browser View (temporarily disabled to fix Atlas functionality)
+// BrowserView.init();
