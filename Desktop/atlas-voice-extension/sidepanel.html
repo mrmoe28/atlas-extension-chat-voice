@@ -83,6 +83,14 @@
         </div>
 
         <div class="setting-item">
+          <label class="mode-toggle">
+            <input type="checkbox" id="wakeWordMode" />
+            <span>Wake Word Detection</span>
+          </label>
+          <p class="mode-description">Activate Atlas by saying "Hey Atlas"</p>
+        </div>
+
+        <div class="setting-item">
           <label for="temperatureSlider" class="slider-label">
             <span>Atlas Creativity</span>
             <span class="slider-value" id="temperatureValue">0.7</span>
@@ -419,6 +427,12 @@
 
       <!-- Centered Voice Orb (Always centered in remaining space) -->
       <div class="orb-container" id="voiceOrbWrapper">
+        <!-- Wake Word Indicator -->
+        <div id="wakeWordIndicator" class="wake-word-indicator" style="display: none;">
+          <span class="wake-word-pulse">👂</span>
+          <span class="wake-word-text">Listening for "Hey Atlas"</span>
+        </div>
+
         <div class="voice-orb-large" id="voiceOrb">
           <div class="orb-inner"></div>
           <div class="orb-ring"></div>

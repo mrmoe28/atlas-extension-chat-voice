@@ -1664,3 +1664,43 @@ h1 {
 .message-content p:last-child {
   margin-bottom: 0;
 }
+
+/* ===== 🎤 WAKE WORD INDICATOR ===== */
+
+.wake-word-indicator {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(74, 163, 255, 0.1);
+  border: 1px solid var(--brand);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--brand);
+  z-index: 10;
+}
+
+.wake-word-pulse {
+  font-size: 20px;
+  animation: wakePulse 2s infinite;
+}
+
+@keyframes wakePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+.wake-word-text {
+  font-weight: 500;
+  white-space: nowrap;
+}

@@ -145,6 +145,7 @@ const els = {
   continuousMode: document.getElementById('continuousMode'),
   desktopMode: document.getElementById('desktopMode'),
   visionMode: document.getElementById('visionMode'),
+  wakeWordMode: document.getElementById('wakeWordMode'),
   captureScreenBtn: document.getElementById('captureScreenBtn'),
   chatContainer: document.getElementById('chatContainer'),
   voiceOrb: document.getElementById('voiceOrb'),
@@ -1792,6 +1793,422 @@ async function handleFileUpload(event) {
   els.fileInput.value = '';
 }
 
+// ===== 🎤 VOICE SUPERPOWERS SYSTEM ===================================
+
+/**
+ * OPTION 2: VOICE SUPERPOWERS
+ * - Wake word detection ("Hey Atlas")
+ * - Voice commands system
+ * - Voice shortcuts for common tasks
+ * - Custom voice response system
+ */
+
+// ===== Wake Word Detection =====
+const WakeWordDetector = (() => {
+  let recognition = null;
+  let isActive = false;
+  let isEnabled = false;
+
+  function init() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      console.warn('Wake word detection not supported in this browser');
+      return false;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript.toLowerCase())
+        .join(' ');
+
+      // Check for wake words
+      if (transcript.includes('hey atlas') ||
+          transcript.includes('hi atlas') ||
+          transcript.includes('okay atlas')) {
+        console.log('🎯 Wake word detected:', transcript);
+        onWakeWordDetected(transcript);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.warn('Wake word detection error:', event.error);
+      }
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if still enabled
+      if (isEnabled && !isActive) {
+        setTimeout(() => {
+          if (isEnabled) start();
+        }, 1000);
+      }
+    };
+
+    return true;
+  }
+
+  function start() {
+    if (!recognition || isActive) return;
+
+    try {
+      recognition.start();
+      isActive = true;
+      isEnabled = true;
+      console.log('👂 Wake word detection started');
+      updateWakeWordUI(true);
+    } catch (error) {
+      console.warn('Failed to start wake word detection:', error);
+    }
+  }
+
+  function stop() {
+    if (!recognition || !isActive) return;
+
+    isEnabled = false;
+    isActive = false;
+    recognition.stop();
+    console.log('🔇 Wake word detection stopped');
+    updateWakeWordUI(false);
+  }
+
+  function toggle() {
+    if (isActive) {
+      stop();
+    } else {
+      start();
+    }
+  }
+
+  function onWakeWordDetected(transcript) {
+    // Visual feedback
+    addMessage('system', '👋 Hey! I heard you say "' + transcript + '"');
+
+    // Auto-activate voice if connected
+    if (connected && !isListening) {
+      enableMic();
+
+      // Auto-disable after 10 seconds if no speech
+      setTimeout(() => {
+        if (isListening && connected) {
+          disableMic();
+        }
+      }, 10000);
+    }
+
+    // Check for immediate commands after wake word
+    VoiceCommands.parseCommand(transcript);
+  }
+
+  function updateWakeWordUI(active) {
+    const indicator = document.getElementById('wakeWordIndicator');
+    if (indicator) {
+      indicator.style.display = active ? 'block' : 'none';
+    }
+  }
+
+  return { init, start, stop, toggle, isActive: () => isActive };
+})();
+
+// ===== Voice Commands System =====
+const VoiceCommands = (() => {
+  const commands = {
+    // Screenshot commands
+    screenshot: {
+      patterns: ['take a screenshot', 'capture screen', 'screenshot', 'take screenshot'],
+      action: async () => {
+        addMessage('system', '📸 Taking screenshot...');
+        // Trigger desktop commander screenshot
+        if (isDesktopMode) {
+          sendDesktopCommand('screenshot');
+        }
+      },
+      description: 'Take a screenshot'
+    },
+
+    // Memory commands
+    remember: {
+      patterns: ['remember this', 'save this', 'store this', 'remember that'],
+      action: async (fullText) => {
+        addMessage('system', '🧠 I\'ll remember that for you!');
+        // Memory will be automatically saved from the conversation
+      },
+      description: 'Save information to memory'
+    },
+
+    // Search commands
+    search: {
+      patterns: ['search for', 'look up', 'find information about'],
+      action: async (fullText) => {
+        const query = fullText.replace(/search for|look up|find information about/gi, '').trim();
+        addMessage('system', `🔍 Searching for: ${query}`);
+        // The AI will handle the search
+      },
+      description: 'Search for information'
+    },
+
+    // Tab management
+    openTab: {
+      patterns: ['open new tab', 'new tab', 'create tab'],
+      action: async () => {
+        addMessage('system', '📑 Opening new tab...');
+        chrome.tabs.create({});
+      },
+      description: 'Open a new browser tab'
+    },
+
+    closeTab: {
+      patterns: ['close tab', 'close this tab'],
+      action: async () => {
+        addMessage('system', '❌ Closing current tab...');
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]) chrome.tabs.remove(tabs[0].id);
+        });
+      },
+      description: 'Close current tab'
+    },
+
+    // System commands
+    clearChat: {
+      patterns: ['clear chat', 'clear conversation', 'start over', 'new conversation'],
+      action: async () => {
+        addMessage('system', '🧹 Clearing conversation...');
+        clearConversation();
+      },
+      description: 'Clear the current conversation'
+    },
+
+    disconnect: {
+      patterns: ['disconnect', 'stop listening', 'goodbye'],
+      action: async () => {
+        addMessage('system', '👋 Disconnecting...');
+        disconnect();
+      },
+      description: 'Disconnect from Atlas'
+    }
+  };
+
+  function parseCommand(text) {
+    const lowerText = text.toLowerCase().trim();
+
+    // Check each command pattern
+    for (const [cmdName, cmd] of Object.entries(commands)) {
+      for (const pattern of cmd.patterns) {
+        if (lowerText.includes(pattern)) {
+          console.log('🎯 Voice command detected:', cmdName);
+          cmd.action(lowerText);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function getCommandsList() {
+    return Object.entries(commands).map(([name, cmd]) => ({
+      name,
+      description: cmd.description,
+      examples: cmd.patterns
+    }));
+  }
+
+  return { parseCommand, getCommandsList, commands };
+})();
+
+// ===== Voice Shortcuts =====
+const VoiceShortcuts = (() => {
+  const shortcuts = {
+    // Quick actions
+    'screenshot': () => VoiceCommands.commands.screenshot.action(),
+    'remember': () => VoiceCommands.commands.remember.action(),
+    'clear': () => VoiceCommands.commands.clearChat.action(),
+    'bye': () => VoiceCommands.commands.disconnect.action(),
+
+    // Navigation
+    'back': () => {
+      addMessage('system', '⬅️ Going back...');
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.executeScript(tabs[0].id, { code: 'window.history.back()' });
+      });
+    },
+
+    'forward': () => {
+      addMessage('system', '➡️ Going forward...');
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.executeScript(tabs[0].id, { code: 'window.history.forward()' });
+      });
+    },
+
+    'refresh': () => {
+      addMessage('system', '🔄 Refreshing page...');
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.reload(tabs[0].id);
+      });
+    },
+
+    // Quick responses
+    'help': () => {
+      const commandsList = VoiceCommands.getCommandsList()
+        .map(cmd => `• ${cmd.description}: "${cmd.examples[0]}"`)
+        .join('\n');
+
+      addMessage('system', `🎤 Voice Commands Available:\n\n${commandsList}\n\n🔥 Quick Shortcuts:\n• "screenshot" - Take screenshot\n• "remember" - Save to memory\n• "clear" - Clear chat\n• "help" - Show this help`);
+    }
+  };
+
+  function execute(shortcutName) {
+    const shortcut = shortcuts[shortcutName.toLowerCase()];
+    if (shortcut) {
+      console.log('⚡ Executing shortcut:', shortcutName);
+      shortcut();
+      return true;
+    }
+    return false;
+  }
+
+  function checkForShortcut(text) {
+    const words = text.toLowerCase().trim().split(/\s+/);
+
+    // Check if any single word matches a shortcut
+    for (const word of words) {
+      if (shortcuts[word]) {
+        execute(word);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return { execute, checkForShortcut, shortcuts };
+})();
+
+// ===== Custom Voice Response System =====
+const CustomResponses = (() => {
+  const responses = {
+    greeting: [
+      'Hey there! How can I help you today?',
+      'Hi! What can I do for you?',
+      'Hello! Ready to assist you.',
+      'Hey! What\'s on your mind?'
+    ],
+
+    acknowledgment: [
+      'Got it!',
+      'Understood!',
+      'On it!',
+      'Sure thing!',
+      'You got it!'
+    ],
+
+    thinking: [
+      'Let me think about that...',
+      'Hmm, interesting question...',
+      'Give me a moment...',
+      'Let me process that...'
+    ],
+
+    success: [
+      'Done!',
+      'All set!',
+      'Task complete!',
+      'Finished!',
+      'There you go!'
+    ],
+
+    error: [
+      'Oops, something went wrong.',
+      'I ran into an issue.',
+      'Sorry, I couldn\'t do that.',
+      'That didn\'t work as expected.'
+    ]
+  };
+
+  function getRandom(category) {
+    const list = responses[category] || responses.acknowledgment;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  function getContextualResponse(context) {
+    // Analyze context and return appropriate response
+    const lowerContext = context.toLowerCase();
+
+    if (lowerContext.includes('hello') || lowerContext.includes('hi ') || lowerContext.includes('hey')) {
+      return getRandom('greeting');
+    }
+
+    if (lowerContext.includes('think') || lowerContext.includes('explain')) {
+      return getRandom('thinking');
+    }
+
+    if (lowerContext.includes('done') || lowerContext.includes('complete') || lowerContext.includes('finish')) {
+      return getRandom('success');
+    }
+
+    if (lowerContext.includes('error') || lowerContext.includes('fail') || lowerContext.includes('wrong')) {
+      return getRandom('error');
+    }
+
+    return getRandom('acknowledgment');
+  }
+
+  return { getRandom, getContextualResponse, responses };
+})();
+
+// ===== Voice Superpowers Integration =====
+
+// Initialize wake word detection when connected
+const originalConnect = els.connectBtn.onclick;
+function enhancedConnect() {
+  if (originalConnect) originalConnect();
+
+  // Initialize wake word detection after connection
+  setTimeout(() => {
+    if (connected && !WakeWordDetector.isActive()) {
+      WakeWordDetector.init();
+    }
+  }, 1000);
+}
+
+// Intercept voice input to check for commands
+const originalEnableMic = enableMic;
+function enableMic() {
+  originalEnableMic();
+
+  // Check for voice commands in real-time
+  if (dataChannel) {
+    const originalOnMessage = dataChannel.onmessage;
+    dataChannel.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Check for user speech transcription
+        if (data.type === 'conversation.item.input_audio_transcription.completed') {
+          const transcript = data.transcript;
+
+          // First check for shortcuts (higher priority)
+          if (!VoiceShortcuts.checkForShortcut(transcript)) {
+            // Then check for commands
+            VoiceCommands.parseCommand(transcript);
+          }
+        }
+      } catch (error) {
+        // Not JSON or parsing failed, ignore
+      }
+
+      // Call original handler
+      if (originalOnMessage) originalOnMessage(event);
+    };
+  }
+}
+
 // Mode switching
 els.continuousMode.addEventListener('change', () => {
   isContinuousMode = els.continuousMode.checked;
@@ -1968,6 +2385,28 @@ MAX 3 words per response.`
     }));
 
     console.log('Updated session instructions:', isDesktopMode ? 'Desktop Commander enabled' : 'Standard mode');
+  }
+
+  saveSettings();
+});
+
+// Wake word detection toggle
+els.wakeWordMode.addEventListener('change', () => {
+  const isEnabled = els.wakeWordMode.checked;
+
+  if (isEnabled) {
+    // Initialize and start wake word detection
+    if (WakeWordDetector.init()) {
+      WakeWordDetector.start();
+      els.orbStatus.textContent = 'Wake word detection enabled';
+      addMessage('system', '👂 Wake word detection enabled! Say "Hey Atlas" to activate.');
+    } else {
+      els.wakeWordMode.checked = false;
+      addMessage('system', '⚠️ Wake word detection not supported in this browser.');
+    }
+  } else {
+    WakeWordDetector.stop();
+    els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
   }
 
   saveSettings();
@@ -2718,11 +3157,12 @@ function loadSettings() {
   const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
   const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
   const savedVisionMode = localStorage.getItem('atlasVoice_visionMode');
+  const savedWakeWordMode = localStorage.getItem('atlasVoice_wakeWordMode');
   const savedTemperature = localStorage.getItem('atlasVoice_temperature');
   const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
   const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedWakeWordMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -2746,6 +3186,12 @@ function loadSettings() {
     isVisionMode = true;
     document.getElementById('captureScreenContainer').style.display = 'block';
     console.log('✅ Vision mode restored');
+  }
+
+  if (savedWakeWordMode === 'true') {
+    els.wakeWordMode.checked = true;
+    // Don't auto-start wake word detection on load - user must connect first
+    console.log('✅ Wake word mode setting restored');
   }
 
   if (savedTemperature) {
@@ -2772,6 +3218,7 @@ function saveSettings() {
     desktopMode: els.desktopMode.checked,
     continuousMode: els.continuousMode.checked,
     visionMode: els.visionMode.checked,
+    wakeWordMode: els.wakeWordMode.checked,
     temperature: els.temperatureSlider.value,
     memoryEnabled: els.memoryEnabled.checked,
     specialInstructions: els.specialInstructions.value
@@ -2782,6 +3229,7 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_serverUrl', settings.serverUrl);
   localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
   localStorage.setItem('atlasVoice_continuousMode', String(settings.continuousMode));
+  localStorage.setItem('atlasVoice_wakeWordMode', String(settings.wakeWordMode));
   localStorage.setItem('atlasVoice_visionMode', String(settings.visionMode));
   localStorage.setItem('atlasVoice_temperature', settings.temperature);
   localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
