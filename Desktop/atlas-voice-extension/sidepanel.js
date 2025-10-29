@@ -984,12 +984,11 @@ async function connectRealtime() {
     }
     
     els.orbStatus.textContent = 'Connecting...';
-    
-    // Use MicPermission for microphone access
-    let localStream;
+
+    // Use MicPermission for microphone access and store globally for mute control
     try {
       console.log('🎤 Requesting microphone access...');
-      localStream = await MicPermission.ensureMic();
+      micStream = await MicPermission.ensureMic();
       console.log('✅ Microphone access granted');
     } catch (e) {
       console.error('❌ WebRTC connection error (mic):', e);
@@ -1023,8 +1022,8 @@ async function connectRealtime() {
         teardown();
       }
     };
-    
-    for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
+
+    for (const track of micStream.getTracks()) pc.addTrack(track, micStream);
 
     createRemoteAudio();
     pc.ontrack = (e) => { remoteAudioEl.srcObject = e.streams[0]; };
@@ -4201,9 +4200,18 @@ els.interruptBtn.addEventListener('click', () => {
 els.muteBtn.addEventListener('click', () => {
   isMuted = !isMuted;
 
-  // Update audio element
+  // Mute/unmute remote audio output (Atlas's voice)
   if (remoteAudioEl) {
     remoteAudioEl.muted = isMuted;
+  }
+
+  // Disable/enable microphone input tracks to stop sending audio to OpenAI
+  if (micStream) {
+    const audioTracks = micStream.getAudioTracks();
+    audioTracks.forEach(track => {
+      track.enabled = !isMuted;
+      console.log(`🎤 Microphone track ${isMuted ? 'disabled' : 'enabled'}`);
+    });
   }
 
   // Update button appearance
@@ -4211,7 +4219,7 @@ els.muteBtn.addEventListener('click', () => {
     els.muteBtn.classList.add('muted');
     els.muteIcon.style.display = 'none';
     els.unmutedIcon.style.display = 'block';
-    els.voiceStatus.textContent = 'Atlas is muted';
+    els.voiceStatus.textContent = 'Atlas is muted (mic off)';
   } else {
     els.muteBtn.classList.remove('muted');
     els.muteIcon.style.display = 'block';
@@ -4221,7 +4229,7 @@ els.muteBtn.addEventListener('click', () => {
     }
   }
 
-  console.log(isMuted ? '🔇 Atlas muted' : '🔊 Atlas unmuted');
+  console.log(isMuted ? '🔇 Atlas muted (microphone disabled)' : '🔊 Atlas unmuted (microphone enabled)');
 });
 
 // Web Speech Fallback
