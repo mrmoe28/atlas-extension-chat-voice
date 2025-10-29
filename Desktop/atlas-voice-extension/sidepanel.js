@@ -2191,7 +2191,7 @@ function enhancedConnect() {
 
 // Intercept voice input to check for commands
 const originalEnableMic = enableMic;
-function enableMic() {
+enableMic = function() {
   originalEnableMic();
 
   // Check for voice commands in real-time
