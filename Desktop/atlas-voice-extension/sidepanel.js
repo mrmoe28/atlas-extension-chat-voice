@@ -790,44 +790,89 @@ async function saveConversationToDB(role, content) {
 async function extractAndSaveMemory(userMessage, aiResponse) {
   if (!els.memoryEnabled.checked) return;
 
-  // Check if user is asking Atlas to remember something
-  const rememberKeywords = ['remember', 'save this', 'keep in mind', 'don\'t forget', 'my name is', 'i prefer', 'i like'];
-  const shouldRemember = rememberKeywords.some(keyword => userMessage.toLowerCase().includes(keyword));
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) return;
 
-  if (shouldRemember) {
-    try {
-      const serverUrl = els.serverUrl.value.trim();
-      if (!serverUrl) return;
+    const messageLower = userMessage.toLowerCase();
 
-      // Determine memory type
-      let memoryType = 'fact';
-      if (userMessage.toLowerCase().includes('prefer') || userMessage.toLowerCase().includes('like')) {
-        memoryType = 'preference';
-      } else if (userMessage.toLowerCase().includes('my name is')) {
-        memoryType = 'personal';
+    // Enhanced memory detection with more triggers
+    const memoryTriggers = {
+      explicit: ['remember', 'save this', 'keep in mind', 'don\'t forget', 'note that'],
+      personal: ['my name is', 'i am', 'i\'m called', 'call me'],
+      preference: ['i prefer', 'i like', 'i love', 'i want', 'i need', 'i always', 'i usually'],
+      fact: ['this is', 'that is', 'means that', 'used for', 'important:', 'note:'],
+      instruction: ['always do', 'never do', 'make sure to', 'from now on']
+    };
+
+    // Check if this is worth remembering
+    let shouldSave = false;
+    let memoryType = 'context';
+    let importanceScore = 5;
+
+    // Explicit memory requests (highest priority)
+    if (memoryTriggers.explicit.some(trigger => messageLower.includes(trigger))) {
+      shouldSave = true;
+      memoryType = 'instruction';
+      importanceScore = 9;
+    }
+    // Personal information
+    else if (memoryTriggers.personal.some(trigger => messageLower.includes(trigger))) {
+      shouldSave = true;
+      memoryType = 'personal';
+      importanceScore = 8;
+    }
+    // User preferences
+    else if (memoryTriggers.preference.some(trigger => messageLower.includes(trigger))) {
+      shouldSave = true;
+      memoryType = 'preference';
+      importanceScore = 7;
+    }
+    // Important facts
+    else if (memoryTriggers.fact.some(trigger => messageLower.includes(trigger))) {
+      shouldSave = true;
+      memoryType = 'fact';
+      importanceScore = 6;
+    }
+    // Instructions for Atlas
+    else if (memoryTriggers.instruction.some(trigger => messageLower.includes(trigger))) {
+      shouldSave = true;
+      memoryType = 'instruction';
+      importanceScore = 8;
+    }
+    // Auto-save context for longer, meaningful messages
+    else if (userMessage.length > 100 && !userMessage.toLowerCase().startsWith('search') && !userMessage.toLowerCase().startsWith('open')) {
+      shouldSave = true;
+      memoryType = 'context';
+      importanceScore = 5;
+    }
+
+    if (shouldSave) {
+      // Extract clean content
+      let content = userMessage.trim();
+
+      // Add AI context if available for better memory quality
+      if (aiResponse && aiResponse.length > 0) {
+        content = `User: "${userMessage}"\nAtlas: "${aiResponse.substring(0, 300)}"`;
       }
 
-      // Extract the content to remember
-      let content = userMessage;
-      if (aiResponse) {
-        content = `User said: "${userMessage}". Context: ${aiResponse.substring(0, 200)}`;
-      }
-
-      await fetch(`${serverUrl}/api/knowledge/memory`, {
+      const response = await fetch(`${serverUrl}/api/knowledge/memory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
           memory_type: memoryType,
           content: content,
-          importance_score: 7
+          importance_score: importanceScore
         })
       });
 
-      console.log('💾 Saved memory:', memoryType, content.substring(0, 50));
-    } catch (error) {
-      console.error('Error saving memory:', error);
+      if (response.ok) {
+        console.log(`💾 Saved ${memoryType} memory (importance: ${importanceScore}):`, content.substring(0, 60));
+      }
     }
+  } catch (error) {
+    console.error('Error saving memory:', error);
   }
 
   // Automatically analyze and save speech patterns
@@ -842,12 +887,29 @@ async function analyzeSpeechPatterns(userMessage, aiResponse) {
 
   conversationCount++;
 
-  // Analyze patterns every 3 conversations for faster learning
-  if (conversationCount % 3 !== 0) return;
+  // Analyze patterns every 2 conversations for faster learning (was every 3)
+  if (conversationCount % 2 !== 0) return;
 
   try {
     const serverUrl = els.serverUrl.value.trim();
     if (!serverUrl) return;
+
+    const messageLower = userMessage.toLowerCase();
+
+    // Detect command patterns
+    const commandPatterns = {
+      desktop: ['open', 'launch', 'close', 'create', 'delete', 'move', 'copy'],
+      web: ['search', 'google', 'youtube', 'click', 'fill', 'navigate'],
+      vision: ['look', 'see', 'watch', 'show me', 'analyze'],
+      system: ['volume', 'brightness', 'lock', 'sleep', 'screenshot']
+    };
+
+    let detectedCommands = [];
+    for (const [category, commands] of Object.entries(commandPatterns)) {
+      if (commands.some(cmd => messageLower.includes(cmd))) {
+        detectedCommands.push(category);
+      }
+    }
 
     // Analyze user's speech patterns
     const patterns = {
@@ -866,12 +928,21 @@ async function analyzeSpeechPatterns(userMessage, aiResponse) {
       // Technical vs casual language
       language_preference: analyzeLanguagePreference(userMessage),
 
+      // Command usage patterns
+      command_preferences: detectedCommands,
+
+      // Message characteristics
+      avg_message_length: userMessage.length,
+      uses_questions: userMessage.includes('?'),
+      uses_commands: userMessage.includes('!'),
+
       // Timestamp for tracking evolution
-      analyzed_at: new Date().toISOString()
+      analyzed_at: new Date().toISOString(),
+      conversation_number: conversationCount
     };
 
     // Save speech pattern to database
-    await fetch(`${serverUrl}/api/pattern`, {
+    const response = await fetch(`${serverUrl}/api/pattern`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -882,7 +953,13 @@ async function analyzeSpeechPatterns(userMessage, aiResponse) {
       })
     });
 
-    console.log('🎭 Saved speech pattern:', patterns);
+    if (response.ok) {
+      console.log('🎭 Saved speech pattern:', {
+        conversation: conversationCount,
+        commands: detectedCommands,
+        style: patterns.communication_style
+      });
+    }
   } catch (error) {
     console.error('Error analyzing speech patterns:', error);
   }
