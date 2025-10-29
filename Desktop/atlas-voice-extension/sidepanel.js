@@ -181,6 +181,7 @@ let isSpeaking = false;
 let isMuted = false;
 let isContinuousMode = false;
 let isDesktopMode = false;
+let speakingTimeout = null; // Timeout to auto-reset stuck speaking state
 let isVisionMode = false;
 let isContinuousVision = false; // Continuous screen vision active
 let visionCaptureInterval = null; // Interval ID for continuous capture
@@ -368,14 +369,33 @@ function createRemoteAudio() {
   remoteAudioEl.onplay = () => {
     isSpeaking = true;
     updateOrbState();
+
+    // Safety timeout: auto-reset if speaking for >30 seconds (likely stuck)
+    if (speakingTimeout) clearTimeout(speakingTimeout);
+    speakingTimeout = setTimeout(() => {
+      console.warn('⚠️ Speaking state timeout - auto-resetting');
+      if (remoteAudioEl && !remoteAudioEl.paused) {
+        remoteAudioEl.pause();
+      }
+      isSpeaking = false;
+      updateOrbState();
+    }, 30000);
   };
 
   remoteAudioEl.onpause = () => {
+    if (speakingTimeout) {
+      clearTimeout(speakingTimeout);
+      speakingTimeout = null;
+    }
     isSpeaking = false;
     updateOrbState();
   };
 
   remoteAudioEl.onended = () => {
+    if (speakingTimeout) {
+      clearTimeout(speakingTimeout);
+      speakingTimeout = null;
+    }
     isSpeaking = false;
     updateOrbState();
   };
@@ -2055,6 +2075,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
       const sessionUpdate = {
         type: 'session.update',
         session: {
+          modalities: ["text", "audio"], // CRITICAL: Enable both text and audio responses
           instructions: instructions, // Use the comprehensive instructions we defined earlier
           voice: 'alloy',
           tools: tools,
@@ -2511,6 +2532,12 @@ function teardown() {
   connected = false;
   isListening = false;
   isSpeaking = false;
+
+  // Clear speaking timeout
+  if (speakingTimeout) {
+    clearTimeout(speakingTimeout);
+    speakingTimeout = null;
+  }
 
   els.orbStatus.textContent = 'Click Connect in menu to start';
   els.statusDot.classList.remove('connected');
@@ -3716,6 +3743,77 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && isListening) disableMic();
 });
 
+// Function to update AI instructions dynamically
+function updateAIInstructions() {
+  if (!connected || !dataChannel || dataChannel.readyState !== 'open') {
+    console.log('⚠️ Cannot update instructions: not connected');
+    return;
+  }
+
+  // Get current settings
+  const isDesktopMode = els.desktopMode.checked;
+  const specialInstructions = els.specialInstructions.value.trim();
+  const memoryEnabled = els.memoryEnabled.checked;
+  const temperature = parseFloat(els.temperatureSlider.value);
+
+  // Build base instructions based on mode
+  let instructions = isDesktopMode
+    ? `You are Atlas Voice. ULTRA CONCISE responses only.
+
+Commands - say just 2 words:
+"Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
+"Launching Chrome. [CMD:LAUNCH_APP:Chrome]"
+"Setting volume 50. [CMD:SYSTEM_VOLUME:50]"
+"Brightness 80. [CMD:BRIGHTNESS:80]"
+"Locking screen. [CMD:LOCK_SCREEN]"
+"Increasing volume. [CMD:VOLUME_UP]"
+"Decreasing volume. [CMD:VOLUME_DOWN]"
+"Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
+
+User: "Open Downloads folder"
+You: "Opening Downloads. [CMD:OPEN_FOLDER:~/Downloads]"
+
+User: "Launch Safari"
+You: "Launching Safari. [CMD:LAUNCH_APP:Safari]"
+
+User: "Set volume to 50"
+You: "Setting volume 50. [CMD:SYSTEM_VOLUME:50]"
+
+User: "Search YouTube for music"
+You: "Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
+
+MAX 3 words per response.`
+    : `You are Atlas Voice. Keep responses under 5 words.`;
+
+  // Add memory context if enabled
+  if (memoryEnabled && memoryContext) {
+    instructions += `\n\n📝 USER MEMORY:\n${memoryContext}`;
+  }
+
+  // Add special instructions if provided
+  if (specialInstructions) {
+    instructions += `\n\n🎯 SPECIAL INSTRUCTIONS:\n${specialInstructions}`;
+  }
+
+  // Send session update
+  dataChannel.send(JSON.stringify({
+    type: 'session.update',
+    session: {
+      modalities: ["text", "audio"], // CRITICAL: Enable both text and audio responses
+      instructions: instructions,
+      temperature: temperature
+    }
+  }));
+
+  console.log('🔄 Updated AI instructions:', {
+    mode: isDesktopMode ? 'Desktop' : 'Standard',
+    memoryEnabled,
+    hasSpecialInstructions: !!specialInstructions,
+    temperature,
+    instructionsLength: instructions.length
+  });
+}
+
 // Mode switching
 els.continuousMode.addEventListener('change', () => {
   isContinuousMode = els.continuousMode.checked;
@@ -3887,6 +3985,7 @@ MAX 3 words per response.`
     dataChannel.send(JSON.stringify({
       type: 'session.update',
       session: {
+        modalities: ["text", "audio"], // CRITICAL: Enable both text and audio responses
         instructions: instructions
       }
     }));
@@ -4409,6 +4508,16 @@ els.interruptBtn.addEventListener('click', () => {
     disableMic();
     isListening = false;
     isSpeaking = false;
+
+    // Force stop audio and clear timeout
+    if (remoteAudioEl && !remoteAudioEl.paused) {
+      remoteAudioEl.pause();
+    }
+    if (speakingTimeout) {
+      clearTimeout(speakingTimeout);
+      speakingTimeout = null;
+    }
+
     removeTypingIndicator();
     updateOrbState();
   } catch (err) {
