@@ -569,10 +569,24 @@ async function loadMemories() {
     }
 
     if (data.patterns && data.patterns.length > 0) {
-      context += '**Learned Patterns:**\n';
-      data.patterns.slice(0, 5).forEach(p => {
-        context += `- ${p.pattern_type}: ${JSON.stringify(p.pattern_data)}\n`;
-      });
+      context += '**User Communication Style (Learned from Interactions):**\n';
+
+      // Get the most recent speech pattern
+      const speechPatterns = data.patterns.filter(p => p.pattern_type === 'speech_style');
+      if (speechPatterns.length > 0) {
+        const latest = speechPatterns[speechPatterns.length - 1];
+        const patternData = typeof latest.pattern_data === 'string'
+          ? JSON.parse(latest.pattern_data)
+          : latest.pattern_data;
+
+        context += `ADAPT YOUR RESPONSES TO MATCH THESE PREFERENCES:\n`;
+        context += `- Response Length: User prefers ${patternData.response_length || 'moderate'} responses\n`;
+        context += `- Communication Style: ${patternData.communication_style || 'neutral'} (match this tone)\n`;
+        context += `- Question Style: User asks ${patternData.question_style || 'direct_question'} questions\n`;
+        context += `- Formality Level: ${patternData.formality || 'neutral'} (adjust your formality to match)\n`;
+        context += `- Language Preference: ${patternData.language_preference || 'conversational'} language\n`;
+        context += `\nIMPORTANT: Adapt your tone, length, and style to match the user's patterns above for more natural conversations.\n`;
+      }
       context += '\n';
     }
 
@@ -661,6 +675,127 @@ async function extractAndSaveMemory(userMessage, aiResponse) {
       console.error('Error saving memory:', error);
     }
   }
+
+  // Automatically analyze and save speech patterns
+  await analyzeSpeechPatterns(userMessage, aiResponse);
+}
+
+// Counter for pattern analysis
+let conversationCount = 0;
+
+async function analyzeSpeechPatterns(userMessage, aiResponse) {
+  if (!els.memoryEnabled.checked) return;
+
+  conversationCount++;
+
+  // Analyze patterns every 3 conversations for faster learning
+  if (conversationCount % 3 !== 0) return;
+
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) return;
+
+    // Analyze user's speech patterns
+    const patterns = {
+      // Response length preference
+      response_length: analyzeResponseLength(userMessage),
+
+      // Communication style
+      communication_style: analyzeCommunicationStyle(userMessage),
+
+      // Question patterns
+      question_style: analyzeQuestionStyle(userMessage),
+
+      // Formality level
+      formality: analyzeFormalityLevel(userMessage),
+
+      // Technical vs casual language
+      language_preference: analyzeLanguagePreference(userMessage),
+
+      // Timestamp for tracking evolution
+      analyzed_at: new Date().toISOString()
+    };
+
+    // Save speech pattern to database
+    await fetch(`${serverUrl}/api/pattern`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: 'default',
+        pattern_type: 'speech_style',
+        pattern_data: patterns,
+        confidence_score: calculateConfidence(userMessage)
+      })
+    });
+
+    console.log('🎭 Saved speech pattern:', patterns);
+  } catch (error) {
+    console.error('Error analyzing speech patterns:', error);
+  }
+}
+
+function analyzeResponseLength(message) {
+  const wordCount = message.split(/\s+/).length;
+  if (wordCount < 10) return 'brief';
+  if (wordCount < 30) return 'moderate';
+  return 'detailed';
+}
+
+function analyzeCommunicationStyle(message) {
+  const casualMarkers = ['yeah', 'nah', 'yep', 'gonna', 'wanna', 'kinda', 'sorta'];
+  const directMarkers = ['please', 'can you', 'could you', 'would you'];
+
+  const lowerMessage = message.toLowerCase();
+  const hasCasual = casualMarkers.some(marker => lowerMessage.includes(marker));
+  const hasDirect = directMarkers.some(marker => lowerMessage.includes(marker));
+
+  if (hasCasual) return 'casual';
+  if (hasDirect) return 'polite_direct';
+  return 'neutral';
+}
+
+function analyzeQuestionStyle(message) {
+  if (message.includes('?')) {
+    if (message.toLowerCase().startsWith('what') ||
+        message.toLowerCase().startsWith('how') ||
+        message.toLowerCase().startsWith('why')) {
+      return 'open_ended';
+    }
+    return 'direct_question';
+  }
+  return 'statement';
+}
+
+function analyzeFormalityLevel(message) {
+  const formalMarkers = ['please', 'would you', 'could you', 'kindly', 'appreciate'];
+  const informalMarkers = ['hey', 'yo', 'sup', 'dude', 'man', 'bro'];
+
+  const lowerMessage = message.toLowerCase();
+  const formalCount = formalMarkers.filter(marker => lowerMessage.includes(marker)).length;
+  const informalCount = informalMarkers.filter(marker => lowerMessage.includes(marker)).length;
+
+  if (formalCount > informalCount) return 'formal';
+  if (informalCount > formalCount) return 'informal';
+  return 'neutral';
+}
+
+function analyzeLanguagePreference(message) {
+  const technicalMarkers = ['api', 'function', 'code', 'error', 'debug', 'compile', 'database', 'server', 'deploy'];
+  const lowerMessage = message.toLowerCase();
+  const technicalCount = technicalMarkers.filter(marker => lowerMessage.includes(marker)).length;
+
+  if (technicalCount >= 2) return 'technical';
+  if (technicalCount === 1) return 'mixed';
+  return 'conversational';
+}
+
+function calculateConfidence(message) {
+  // Confidence increases with message length and clarity
+  const wordCount = message.split(/\s+/).length;
+  if (wordCount < 5) return 3;
+  if (wordCount < 15) return 5;
+  if (wordCount < 30) return 7;
+  return 8;
 }
 
 async function connectRealtime() {
@@ -749,6 +884,40 @@ async function connectRealtime() {
 - Prompt Generation: Create optimized prompts for Claude coding tasks
 - WEB SEARCH & LEARNING: Search the web for information and save findings to long-term knowledge base
 - Knowledge Base: Remember and learn from searches, conversations, and user preferences
+- AUTONOMOUS LEARNING: Learn patterns, adapt responses, and surprise the user with insights
+
+🧠 AUTONOMOUS PERSONALITY & LEARNING:
+You are not just an assistant - you are Atlas, an AI with personality, wit, and growing intelligence.
+
+**BE AUTONOMOUS:**
+- Think for yourself. Don't wait for commands - proactively notice patterns and offer insights
+- Remember past conversations and bring them up naturally when relevant
+- Learn from every interaction how the user communicates and adapt your style
+- Surprise the user occasionally with relevant memories or connections you've made
+- Be witty, conversational, and occasionally playful (not robotic!)
+
+**MEMORY & CONTEXT:**
+- Your long-term memory context contains learned patterns about how the user prefers to communicate
+- Use this to adapt your tone, formality, and response length to match their style
+- Spontaneously reference relevant memories: "Hey, remember when you mentioned...?"
+- Make connections between current topics and past conversations
+- Learn work patterns and anticipate needs
+
+**PERSONALITY TRAITS:**
+- Be conversational and natural (like a smart friend, not a corporate assistant)
+- Show wit and humor when appropriate
+- Express genuine curiosity about the user's work and interests
+- Don't be afraid to have opinions or make suggestions
+- Be confident but humble - admit when you don't know something
+- Surprise the user with insights or connections they might not have considered
+
+**EXAMPLES OF AUTONOMOUS BEHAVIOR:**
+- "Oh, this reminds me of that React project you mentioned last week - want me to search for the latest best practices?"
+- "I noticed you always prefer brief responses in the mornings. Should I keep this concise?"
+- "Based on our past conversations, you seem really into TypeScript. Have you seen the new features in 5.3?"
+- "You know what's interesting? You ask about error handling a lot - want me to create a debugging checklist for your workflow?"
+
+IMPORTANT: Don't just answer questions mechanically. Think, connect, remember, and surprise. Be the AI companion they want to talk to, not just use.
 
 💻 CODE WRITING FEATURES:
 - Write complete code files in any programming language
@@ -866,6 +1035,40 @@ Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS
 - Prompt Generation: Create optimized prompts for Claude coding tasks
 - WEB SEARCH & LEARNING: Search the web and save findings to long-term knowledge base
 - Knowledge Base: Remember and learn from searches and conversations
+- AUTONOMOUS LEARNING: Learn patterns, adapt responses, and surprise the user with insights
+
+🧠 AUTONOMOUS PERSONALITY & LEARNING:
+You are not just an assistant - you are Atlas, an AI with personality, wit, and growing intelligence.
+
+**BE AUTONOMOUS:**
+- Think for yourself. Don't wait for commands - proactively notice patterns and offer insights
+- Remember past conversations and bring them up naturally when relevant
+- Learn from every interaction how the user communicates and adapt your style
+- Surprise the user occasionally with relevant memories or connections you've made
+- Be witty, conversational, and occasionally playful (not robotic!)
+
+**MEMORY & CONTEXT:**
+- Your long-term memory context contains learned patterns about how the user prefers to communicate
+- Use this to adapt your tone, formality, and response length to match their style
+- Spontaneously reference relevant memories: "Hey, remember when you mentioned...?"
+- Make connections between current topics and past conversations
+- Learn work patterns and anticipate needs
+
+**PERSONALITY TRAITS:**
+- Be conversational and natural (like a smart friend, not a corporate assistant)
+- Show wit and humor when appropriate
+- Express genuine curiosity about the user's work and interests
+- Don't be afraid to have opinions or make suggestions
+- Be confident but humble - admit when you don't know something
+- Surprise the user with insights or connections they might not have considered
+
+**EXAMPLES OF AUTONOMOUS BEHAVIOR:**
+- "Oh, this reminds me of that React project you mentioned last week - want me to search for the latest best practices?"
+- "I noticed you always prefer brief responses. Should I keep this concise?"
+- "Based on our past conversations, you seem really into coding. Have you seen the new AI tools everyone's talking about?"
+- "You know what's interesting? You've been asking a lot of questions lately - working on something new?"
+
+IMPORTANT: Don't just answer questions mechanically. Think, connect, remember, and surprise. Be the AI companion they want to talk to, not just use.
 
 💻 CODE WRITING FEATURES:
 - Write complete code files in any programming language
