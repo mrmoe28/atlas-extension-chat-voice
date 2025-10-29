@@ -11,11 +11,11 @@ const distDir = path.join(__dirname, '../build-tools/dist');
 
 console.log('🏗️  Building Chrome Extension...');
 
-async function copyDirectory(src, dest) {
+async function copyDirectory(src, dest, isRoot = true) {
   await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
-  
-  // Extension files to include
+
+  // Extension files to include at root level only
   const extensionFiles = [
     'manifest.json',
     'background.js',
@@ -26,18 +26,18 @@ async function copyDirectory(src, dest) {
     'assets',
     'lib'  // PDF.js library
   ];
-  
+
   for (const entry of entries) {
-    // Only copy extension files
-    if (!extensionFiles.includes(entry.name)) {
+    // Only filter at root level; copy everything within subdirectories
+    if (isRoot && !extensionFiles.includes(entry.name)) {
       continue;
     }
-    
+
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
-    
+
     if (entry.isDirectory()) {
-      await copyDirectory(srcPath, destPath);
+      await copyDirectory(srcPath, destPath, false);
     } else {
       await fs.copyFile(srcPath, destPath);
       console.log(`   ✅ Copied: ${entry.name}`);
