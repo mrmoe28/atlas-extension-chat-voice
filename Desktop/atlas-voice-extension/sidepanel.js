@@ -1708,6 +1708,13 @@ async function sendTextMessage() {
   addMessage('user', text);
   els.textInput.value = '';
 
+  // 🔌 CHECK FOR SMART INTEGRATIONS COMMANDS FIRST
+  // If it's a smart integration command, handle it locally and return
+  if (typeof SmartIntegrations !== 'undefined' && SmartIntegrations.handleCommand(text)) {
+    console.log('✅ Smart Integration command handled');
+    return;
+  }
+
   // 🧠 ADVANCED MEMORY: Proactive recall & pattern tracking
   if (memoryEnabled) {
     // Track this interaction for pattern recognition
@@ -1997,6 +2004,11 @@ const VoiceCommands = (() => {
   function parseCommand(text) {
     const lowerText = text.toLowerCase().trim();
 
+    // First check Smart Integrations (higher priority for external services)
+    if (SmartIntegrations && SmartIntegrations.handleCommand(text)) {
+      return true;
+    }
+
     // Check each command pattern
     for (const [cmdName, cmd] of Object.entries(commands)) {
       for (const pattern of cmd.patterns) {
@@ -2208,6 +2220,302 @@ function enableMic() {
     };
   }
 }
+
+// ===== 🔌 SMART INTEGRATIONS SYSTEM ===================================
+
+/**
+ * OPTION 3: SMART INTEGRATIONS
+ * - Web search (Google, DuckDuckGo)
+ * - Weather API
+ * - News API
+ * - Wikipedia integration
+ * - YouTube search
+ * - Translation services
+ * - Quick facts and data
+ */
+
+// ===== Web Search Integration =====
+const WebSearch = (() => {
+  async function google(query) {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `🔍 Searching Google for: ${query}`);
+  }
+
+  async function duckduckgo(query) {
+    const url = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `🔍 Searching DuckDuckGo for: ${query}`);
+  }
+
+  async function youtube(query) {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `🎥 Searching YouTube for: ${query}`);
+  }
+
+  async function wikipedia(query) {
+    const url = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `📚 Searching Wikipedia for: ${query}`);
+  }
+
+  return { google, duckduckgo, youtube, wikipedia };
+})();
+
+// ===== Weather Integration =====
+const WeatherAPI = (() => {
+  // Using Open-Meteo (free, no API key required)
+  async function getWeather(location) {
+    try {
+      addMessage('system', `⏳ Fetching weather for ${location}...`);
+
+      // First, geocode the location
+      const geoResponse = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`
+      );
+      const geoData = await geoResponse.json();
+
+      if (!geoData.results || geoData.results.length === 0) {
+        addMessage('system', `❌ Location not found: ${location}`);
+        return null;
+      }
+
+      const { latitude, longitude, name, country } = geoData.results[0];
+
+      // Get weather data
+      const weatherResponse = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`
+      );
+      const weatherData = await weatherResponse.json();
+
+      const current = weatherData.current;
+      const weatherCodes = {
+        0: '☀️ Clear sky',
+        1: '🌤️ Mainly clear',
+        2: '⛅ Partly cloudy',
+        3: '☁️ Overcast',
+        45: '🌫️ Foggy',
+        48: '🌫️ Foggy',
+        51: '🌦️ Light drizzle',
+        61: '🌧️ Light rain',
+        63: '🌧️ Moderate rain',
+        65: '🌧️ Heavy rain',
+        71: '❄️ Light snow',
+        73: '❄️ Moderate snow',
+        75: '❄️ Heavy snow',
+        95: '⛈️ Thunderstorm'
+      };
+
+      const condition = weatherCodes[current.weather_code] || '🌡️ Unknown';
+      const temp = Math.round(current.temperature_2m);
+      const humidity = current.relative_humidity_2m;
+      const windSpeed = Math.round(current.wind_speed_10m);
+
+      const weatherMessage = `
+🌍 **${name}, ${country}**
+
+${condition}
+🌡️ Temperature: ${temp}°F
+💧 Humidity: ${humidity}%
+💨 Wind: ${windSpeed} mph
+      `.trim();
+
+      addMessage('assistant', weatherMessage);
+      return weatherData;
+    } catch (error) {
+      console.error('Weather API error:', error);
+      addMessage('system', `❌ Failed to fetch weather: ${error.message}`);
+      return null;
+    }
+  }
+
+  return { getWeather };
+})();
+
+// ===== News Integration =====
+const NewsAPI = (() => {
+  // Using NewsAPI (requires API key for production, using demo for now)
+  async function getTopHeadlines(category = 'general') {
+    try {
+      addMessage('system', `📰 Fetching ${category} news...`);
+
+      // For demo purposes, open news sites
+      const newsUrls = {
+        general: 'https://news.google.com',
+        technology: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtVnVHZ0pWVXlnQVAB',
+        business: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB',
+        sports: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp1ZEdvU0FtVnVHZ0pWVXlnQVAB',
+        entertainment: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB'
+      };
+
+      const url = newsUrls[category] || newsUrls.general;
+      chrome.tabs.create({ url });
+      addMessage('system', `📰 Opening ${category} news`);
+    } catch (error) {
+      console.error('News API error:', error);
+      addMessage('system', `❌ Failed to fetch news: ${error.message}`);
+    }
+  }
+
+  return { getTopHeadlines };
+})();
+
+// ===== Translation Integration =====
+const Translator = (() => {
+  async function translate(text, targetLang = 'es') {
+    try {
+      addMessage('system', `🌐 Translating to ${targetLang}...`);
+
+      // Using Google Translate (opens in new tab)
+      const url = `https://translate.google.com/?sl=auto&tl=${targetLang}&text=${encodeURIComponent(text)}`;
+      chrome.tabs.create({ url });
+      addMessage('system', `🌐 Opening Google Translate`);
+    } catch (error) {
+      console.error('Translation error:', error);
+      addMessage('system', `❌ Failed to translate: ${error.message}`);
+    }
+  }
+
+  const languages = {
+    'spanish': 'es',
+    'french': 'fr',
+    'german': 'de',
+    'italian': 'it',
+    'portuguese': 'pt',
+    'russian': 'ru',
+    'japanese': 'ja',
+    'korean': 'ko',
+    'chinese': 'zh',
+    'arabic': 'ar'
+  };
+
+  return { translate, languages };
+})();
+
+// ===== Quick Facts Integration =====
+const QuickFacts = (() => {
+  async function getTime(timezone = 'local') {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    addMessage('assistant', `⏰ Current time: ${timeString}`);
+  }
+
+  async function getDate() {
+    const now = new Date();
+    const dateString = now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    addMessage('assistant', `📅 Today's date: ${dateString}`);
+  }
+
+  async function calculate(expression) {
+    try {
+      // Simple calculator - sanitize input
+      const sanitized = expression.replace(/[^0-9+\-*/().\s]/g, '');
+      const result = eval(sanitized);
+      addMessage('assistant', `🔢 ${expression} = ${result}`);
+    } catch (error) {
+      addMessage('system', `❌ Invalid calculation: ${expression}`);
+    }
+  }
+
+  return { getTime, getDate, calculate };
+})();
+
+// ===== Smart Integrations Command Handler =====
+const SmartIntegrations = (() => {
+  function handleCommand(text) {
+    const lowerText = text.toLowerCase().trim();
+
+    // Weather commands
+    if (lowerText.includes('weather') || lowerText.includes('temperature')) {
+      const locationMatch = lowerText.match(/(?:weather|temperature)\s+(?:in|for|at)\s+([a-z\s]+)/i);
+      const location = locationMatch ? locationMatch[1].trim() : 'New York';
+      WeatherAPI.getWeather(location);
+      return true;
+    }
+
+    // News commands
+    if (lowerText.includes('news') || lowerText.includes('headlines')) {
+      const categoryMatch = lowerText.match(/(?:news|headlines)\s+(?:about|on)\s+([a-z]+)/i);
+      const category = categoryMatch ? categoryMatch[1] : 'general';
+      NewsAPI.getTopHeadlines(category);
+      return true;
+    }
+
+    // Web search commands
+    if (lowerText.startsWith('search ') || lowerText.startsWith('google ')) {
+      const query = lowerText.replace(/^(search|google)\s+/i, '');
+      WebSearch.google(query);
+      return true;
+    }
+
+    if (lowerText.startsWith('youtube ') || lowerText.includes('search youtube')) {
+      const query = lowerText.replace(/^youtube\s+|search youtube for\s+/i, '');
+      WebSearch.youtube(query);
+      return true;
+    }
+
+    if (lowerText.startsWith('wiki ') || lowerText.includes('wikipedia')) {
+      const query = lowerText.replace(/^wiki\s+|search wikipedia for\s+/i, '');
+      WebSearch.wikipedia(query);
+      return true;
+    }
+
+    // Translation commands
+    if (lowerText.includes('translate')) {
+      const textMatch = lowerText.match(/translate\s+["']([^"']+)["']/i);
+      const langMatch = lowerText.match(/to\s+([a-z]+)/i);
+
+      if (textMatch) {
+        const text = textMatch[1];
+        const lang = langMatch ? Translator.languages[langMatch[1]] || 'es' : 'es';
+        Translator.translate(text, lang);
+        return true;
+      }
+    }
+
+    // Time/Date commands
+    if (lowerText.includes('what time') || lowerText.includes('current time')) {
+      QuickFacts.getTime();
+      return true;
+    }
+
+    if (lowerText.includes('what date') || lowerText.includes('today\'s date') || lowerText.includes('what day')) {
+      QuickFacts.getDate();
+      return true;
+    }
+
+    // Calculator commands
+    if (lowerText.includes('calculate') || lowerText.includes('what is')) {
+      const calcMatch = lowerText.match(/(?:calculate|what is)\s+([0-9+\-*/().\s]+)/i);
+      if (calcMatch) {
+        QuickFacts.calculate(calcMatch[1]);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return {
+    handleCommand,
+    WebSearch,
+    WeatherAPI,
+    NewsAPI,
+    Translator,
+    QuickFacts
+  };
+})();
 
 // Mode switching
 els.continuousMode.addEventListener('change', () => {
