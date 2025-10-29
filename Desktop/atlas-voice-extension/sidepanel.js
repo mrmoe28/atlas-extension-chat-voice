@@ -3451,6 +3451,15 @@ els.serverUrl.addEventListener('change', () => {
   saveSettings();
 });
 
+// Save auto-connect setting when changed
+const autoConnectCheckbox = document.getElementById('autoConnect');
+if (autoConnectCheckbox) {
+  autoConnectCheckbox.addEventListener('change', () => {
+    console.log('💾 Auto-connect setting changed:', autoConnectCheckbox.checked);
+    saveSettings();
+  });
+}
+
 // Screen Capture Functionality
 async function captureScreen() {
   try {
