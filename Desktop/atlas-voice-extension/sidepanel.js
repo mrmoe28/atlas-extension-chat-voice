@@ -2517,6 +2517,49 @@ const SmartIntegrations = (() => {
   };
 })();
 
+// ===== ✨ UX POLISH SYSTEM ===================================
+
+// Typing Indicator
+const TypingIndicator = (() => {
+  let indicator = null;
+
+  function show() {
+    if (indicator) return;
+    indicator = document.createElement('div');
+    indicator.className = 'typing-indicator';
+    indicator.innerHTML = `<span class="typing-indicator-text">Atlas is thinking</span><div class="typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+    els.chatContainer.appendChild(indicator);
+    els.chatContainer.scrollTop = els.chatContainer.scrollHeight;
+  }
+
+  function hide() {
+    if (indicator) {
+      indicator.remove();
+      indicator = null;
+    }
+  }
+
+  return { show, hide };
+})();
+
+// Toast Notifications
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    els.menuBtn.click();
+  }
+  if (e.key === 'Escape' && isListening) disableMic();
+});
+
 // Mode switching
 els.continuousMode.addEventListener('change', () => {
   isContinuousMode = els.continuousMode.checked;
