@@ -710,6 +710,9 @@ async function connectRealtime() {
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
     console.log('✅ Ephemeral token received');
 
+    // Load long-term memories if enabled
+    await loadMemories();
+
     // Create new peer connection
     pc = new RTCPeerConnection();
     
@@ -734,7 +737,7 @@ async function connectRealtime() {
 
       // Configure session with desktop commander instructions if enabled
       const instructions = isDesktopMode
-        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander, Web Automation, Code Writing, and Document Reading capabilities.
+        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander, Web Automation, Code Writing, and Document Reading capabilities.${memoryContext}
 
 🎯 CAPABILITIES:
 - Desktop Commander: Full system control (files, apps, system settings)
@@ -843,7 +846,7 @@ User: "Search for 'artificial intelligence' on Google"
 You: "Searching Google. [CMD:SEARCH_WEB:artificial intelligence]"
 
 Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS use triple backticks with the language name for proper formatting and copy functionality. When creating prompts, use the appropriate function tools to generate properly formatted prompts that will be displayed in the chat with copy functionality.`
-        : `You are Atlas Voice, a helpful AI assistant with web automation, code writing, and document reading capabilities.
+        : `You are Atlas Voice, a helpful AI assistant with web automation, code writing, and document reading capabilities.${memoryContext}
 
 🎯 CAPABILITIES:
 - Web Automation: Browser control, form filling, element interaction
@@ -1384,6 +1387,8 @@ IMPORTANT:
           if (msg.transcript && currentUserMessage !== msg.transcript) {
             currentUserMessage = msg.transcript;
             addMessage('user', msg.transcript);
+            // Save to database
+            saveConversationToDB('user', msg.transcript);
           }
         }
 
@@ -1631,6 +1636,9 @@ IMPORTANT:
           if (currentAIMessage) {
             removeTypingIndicator();
             addMessage('assistant', currentAIMessage);
+            // Save to database and check for memory keywords
+            saveConversationToDB('assistant', currentAIMessage);
+            extractAndSaveMemory(currentUserMessage, currentAIMessage);
             currentAIMessage = '';
           }
         }
@@ -1644,6 +1652,9 @@ IMPORTANT:
           if (currentAIMessage) {
             removeTypingIndicator();
             addMessage('assistant', currentAIMessage);
+            // Save to database and check for memory keywords
+            saveConversationToDB('assistant', currentAIMessage);
+            extractAndSaveMemory(currentUserMessage, currentAIMessage);
             currentAIMessage = '';
           }
         }
