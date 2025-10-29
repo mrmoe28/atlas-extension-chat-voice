@@ -180,6 +180,7 @@ let isDesktopMode = false;
 let isVisionMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
+let isProcessingResponse = false; // Flag to prevent duplicate message processing
 let lastScreenshot = null;
 let memoryContext = ''; // Loaded memories for AI context
 let sessionId = Date.now().toString(); // Unique session ID for conversation tracking
@@ -2184,13 +2185,19 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
           dataChannel.send(JSON.stringify({ type: 'response.create' }));
         }
 
-        // Handle AI text responses
-        if (msg.type === 'response.text.delta') {
+        // Handle AI responses (both text and audio transcript)
+        if (msg.type === 'response.text.delta' || msg.type === 'response.audio_transcript.delta') {
           currentAIMessage += msg.delta || '';
         }
 
-        if (msg.type === 'response.text.done' || msg.type === 'response.done') {
-          if (currentAIMessage) {
+        // Combine all completion events to prevent duplicate messages
+        if (msg.type === 'response.text.done' || 
+            msg.type === 'response.audio_transcript.done' || 
+            msg.type === 'response.done') {
+          
+          // Only process if we haven't already processed this message
+          if (currentAIMessage && !isProcessingResponse) {
+            isProcessingResponse = true; // Flag to prevent duplicate processing
             removeTypingIndicator();
 
             // Clean command syntax from display (but keep in DB)
@@ -2205,30 +2212,11 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
             saveConversationToDB('assistant', currentAIMessage);
             extractAndSaveMemory(currentUserMessage, currentAIMessage);
             currentAIMessage = '';
-          }
-        }
-
-        // Handle AI audio transcript (for voice responses)
-        if (msg.type === 'response.audio_transcript.delta') {
-          currentAIMessage += msg.delta || '';
-        }
-
-        if (msg.type === 'response.audio_transcript.done') {
-          if (currentAIMessage) {
-            removeTypingIndicator();
-
-            // Clean command syntax from display (but keep in DB)
-            const displayMessage = currentAIMessage.replace(/\[CMD:[^\]]+\]/g, '').replace(/\[WEB:[^\]]+\]/g, '').trim();
-
-            // Only show message if there's content after removing commands
-            if (displayMessage) {
-              addMessage('assistant', displayMessage);
-            }
-
-            // Save full message to database (with commands) for context
-            saveConversationToDB('assistant', currentAIMessage);
-            extractAndSaveMemory(currentUserMessage, currentAIMessage);
-            currentAIMessage = '';
+            
+            // Reset flag after a small delay
+            setTimeout(() => {
+              isProcessingResponse = false;
+            }, 100);
           }
         }
 
