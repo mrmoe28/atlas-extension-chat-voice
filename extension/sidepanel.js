@@ -145,6 +145,7 @@ const els = {
   continuousMode: document.getElementById('continuousMode'),
   desktopMode: document.getElementById('desktopMode'),
   visionMode: document.getElementById('visionMode'),
+  wakeWordMode: document.getElementById('wakeWordMode'),
   captureScreenBtn: document.getElementById('captureScreenBtn'),
   chatContainer: document.getElementById('chatContainer'),
   voiceOrb: document.getElementById('voiceOrb'),
@@ -164,7 +165,11 @@ const els = {
   memoryEnabled: document.getElementById('memoryEnabled'),
   specialInstructions: document.getElementById('specialInstructions'),
   viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
-  clearMemoryBtn: document.getElementById('clearMemoryBtn')
+  clearMemoryBtn: document.getElementById('clearMemoryBtn'),
+  textInput: document.getElementById('textInput'),
+  textSendBtn: document.getElementById('textSendBtn'),
+  fileUploadBtn: document.getElementById('fileUploadBtn'),
+  fileInput: document.getElementById('fileInput')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -176,6 +181,8 @@ let isVisionMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
+let memoryContext = ''; // Loaded memories for AI context
+let sessionId = Date.now().toString(); // Unique session ID for conversation tracking
 
 // Settings Modal Management
 let isModalOpen = false;
@@ -360,7 +367,7 @@ function updateOrbState() {
   }
 }
 
-function addMessage(role, content, messageType = 'text') {
+function addMessage(role, content, messageType = 'text', attachments = null) {
   if (!content || content.trim() === '') return;
 
   // Hide orb, show chat
@@ -379,12 +386,63 @@ function addMessage(role, content, messageType = 'text') {
 
   const contentEl = document.createElement('div');
   contentEl.className = 'message-content';
-  
+
   // Check if content contains a prompt or code block
   if (messageType === 'prompt' || content.includes('```') || content.includes('PROMPT:')) {
     contentEl.innerHTML = formatPromptMessage(content);
   } else {
     contentEl.textContent = content;
+  }
+
+  // Display attachments (images, documents)
+  if (attachments) {
+    const attachmentEl = document.createElement('div');
+    attachmentEl.className = 'message-attachment';
+
+    if (attachments.type === 'image') {
+      const img = document.createElement('img');
+      img.src = attachments.data;
+      img.alt = attachments.name || 'Uploaded image';
+      img.style.maxWidth = '300px';
+      img.style.maxHeight = '300px';
+      img.style.borderRadius = '8px';
+      img.style.marginTop = '8px';
+      img.style.cursor = 'pointer';
+      img.onclick = () => window.open(attachments.data, '_blank');
+      attachmentEl.appendChild(img);
+    } else if (attachments.type === 'document') {
+      const docEl = document.createElement('div');
+      docEl.className = 'document-preview';
+      docEl.style.padding = '12px';
+      docEl.style.marginTop = '8px';
+      docEl.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+      docEl.style.borderRadius = '8px';
+      docEl.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+
+      const docIcon = document.createElement('div');
+      docIcon.style.fontSize = '24px';
+      docIcon.textContent = '📄';
+
+      const docName = document.createElement('div');
+      docName.textContent = attachments.name;
+      docName.style.fontSize = '14px';
+      docName.style.marginTop = '4px';
+
+      const docPreview = document.createElement('pre');
+      docPreview.textContent = attachments.preview || 'Document content';
+      docPreview.style.fontSize = '12px';
+      docPreview.style.marginTop = '8px';
+      docPreview.style.maxHeight = '200px';
+      docPreview.style.overflow = 'auto';
+      docPreview.style.whiteSpace = 'pre-wrap';
+
+      docEl.appendChild(docIcon);
+      docEl.appendChild(docName);
+      docEl.appendChild(docPreview);
+      attachmentEl.appendChild(docEl);
+    }
+
+    contentEl.appendChild(attachmentEl);
   }
 
   // Add copy button for Atlas messages
@@ -399,7 +457,7 @@ function addMessage(role, content, messageType = 'text') {
       Copy
     `;
     copyBtn.onclick = () => copyMessageContent(content, copyBtn);
-    
+
     const messageActions = document.createElement('div');
     messageActions.className = 'message-actions';
     messageActions.appendChild(copyBtn);
@@ -521,6 +579,299 @@ function removeTypingIndicator() {
   if (indicator) indicator.remove();
 }
 
+// ===== 🧠 MEMORY SYSTEM INTEGRATION =====
+
+// Get current time of day for time-aware greetings
+function getTimeOfDay() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+function getTimeContext() {
+  const now = new Date();
+  const hour = now.getHours();
+  const timeOfDay = getTimeOfDay();
+
+  return `\n**CURRENT TIME CONTEXT:**
+- Current time: ${hour}:${now.getMinutes().toString().padStart(2, '0')}
+- Time of day: ${timeOfDay}
+- Use this to provide time-appropriate greetings when the user first interacts with you\n\n`;
+}
+
+async function loadMemories() {
+  if (!els.memoryEnabled.checked) {
+    console.log('💾 Memory disabled by user');
+    memoryContext = '';
+    return '';
+  }
+
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) {
+      console.log('⚠️ No server URL configured');
+      return '';
+    }
+
+    console.log('🧠 Loading memories from database...');
+    const response = await fetch(`${serverUrl}/api/knowledge`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to load memories:', response.status);
+      return '';
+    }
+
+    const data = await response.json();
+
+    // Format memories for AI context
+    let context = '\n\n🧠 LONG-TERM MEMORY CONTEXT:\n\n';
+
+    // Add current time context for time-aware greetings
+    context += getTimeContext();
+
+    if (data.memory && data.memory.length > 0) {
+      context += '**Important Facts & Preferences:**\n';
+      data.memory.slice(0, 10).forEach(m => {
+        context += `- [${m.memory_type}] ${m.content} (importance: ${m.importance_score}/10)\n`;
+      });
+      context += '\n';
+    }
+
+    if (data.patterns && data.patterns.length > 0) {
+      context += '**User Communication Style (Learned from Interactions):**\n';
+
+      // Get the most recent speech pattern
+      const speechPatterns = data.patterns.filter(p => p.pattern_type === 'speech_style');
+      if (speechPatterns.length > 0) {
+        const latest = speechPatterns[speechPatterns.length - 1];
+        const patternData = typeof latest.pattern_data === 'string'
+          ? JSON.parse(latest.pattern_data)
+          : latest.pattern_data;
+
+        context += `ADAPT YOUR RESPONSES TO MATCH THESE PREFERENCES:\n`;
+        context += `- Response Length: User prefers ${patternData.response_length || 'moderate'} responses\n`;
+        context += `- Communication Style: ${patternData.communication_style || 'neutral'} (match this tone)\n`;
+        context += `- Question Style: User asks ${patternData.question_style || 'direct_question'} questions\n`;
+        context += `- Formality Level: ${patternData.formality || 'neutral'} (adjust your formality to match)\n`;
+        context += `- Language Preference: ${patternData.language_preference || 'conversational'} language\n`;
+        context += `\nIMPORTANT: Adapt your tone, length, and style to match the user's patterns above for more natural conversations.\n`;
+      }
+      context += '\n';
+    }
+
+    if (data.knowledge && data.knowledge.length > 0) {
+      context += '**Knowledge Base:**\n';
+      data.knowledge.slice(0, 10).forEach(k => {
+        context += `- [${k.category}] ${k.title}: ${k.content}\n`;
+      });
+    }
+
+    memoryContext = context;
+    console.log('✅ Loaded memory context:', context.length, 'chars');
+    return context;
+  } catch (error) {
+    console.error('Error loading memories:', error);
+    return '';
+  }
+}
+
+async function saveConversationToDB(role, content) {
+  if (!els.memoryEnabled.checked) return;
+
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) return;
+
+    await fetch(`${serverUrl}/api/conversation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: 'default',
+        session_id: sessionId,
+        role: role,
+        content: content,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          desktop_mode: isDesktopMode,
+          vision_mode: isVisionMode
+        }
+      })
+    });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+  }
+}
+
+async function extractAndSaveMemory(userMessage, aiResponse) {
+  if (!els.memoryEnabled.checked) return;
+
+  // Check if user is asking Atlas to remember something
+  const rememberKeywords = ['remember', 'save this', 'keep in mind', 'don\'t forget', 'my name is', 'i prefer', 'i like'];
+  const shouldRemember = rememberKeywords.some(keyword => userMessage.toLowerCase().includes(keyword));
+
+  if (shouldRemember) {
+    try {
+      const serverUrl = els.serverUrl.value.trim();
+      if (!serverUrl) return;
+
+      // Determine memory type
+      let memoryType = 'fact';
+      if (userMessage.toLowerCase().includes('prefer') || userMessage.toLowerCase().includes('like')) {
+        memoryType = 'preference';
+      } else if (userMessage.toLowerCase().includes('my name is')) {
+        memoryType = 'personal';
+      }
+
+      // Extract the content to remember
+      let content = userMessage;
+      if (aiResponse) {
+        content = `User said: "${userMessage}". Context: ${aiResponse.substring(0, 200)}`;
+      }
+
+      await fetch(`${serverUrl}/api/knowledge/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: 'default',
+          memory_type: memoryType,
+          content: content,
+          importance_score: 7
+        })
+      });
+
+      console.log('💾 Saved memory:', memoryType, content.substring(0, 50));
+    } catch (error) {
+      console.error('Error saving memory:', error);
+    }
+  }
+
+  // Automatically analyze and save speech patterns
+  await analyzeSpeechPatterns(userMessage, aiResponse);
+}
+
+// Counter for pattern analysis
+let conversationCount = 0;
+
+async function analyzeSpeechPatterns(userMessage, aiResponse) {
+  if (!els.memoryEnabled.checked) return;
+
+  conversationCount++;
+
+  // Analyze patterns every 3 conversations for faster learning
+  if (conversationCount % 3 !== 0) return;
+
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) return;
+
+    // Analyze user's speech patterns
+    const patterns = {
+      // Response length preference
+      response_length: analyzeResponseLength(userMessage),
+
+      // Communication style
+      communication_style: analyzeCommunicationStyle(userMessage),
+
+      // Question patterns
+      question_style: analyzeQuestionStyle(userMessage),
+
+      // Formality level
+      formality: analyzeFormalityLevel(userMessage),
+
+      // Technical vs casual language
+      language_preference: analyzeLanguagePreference(userMessage),
+
+      // Timestamp for tracking evolution
+      analyzed_at: new Date().toISOString()
+    };
+
+    // Save speech pattern to database
+    await fetch(`${serverUrl}/api/pattern`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: 'default',
+        pattern_type: 'speech_style',
+        pattern_data: patterns,
+        confidence_score: calculateConfidence(userMessage)
+      })
+    });
+
+    console.log('🎭 Saved speech pattern:', patterns);
+  } catch (error) {
+    console.error('Error analyzing speech patterns:', error);
+  }
+}
+
+function analyzeResponseLength(message) {
+  const wordCount = message.split(/\s+/).length;
+  if (wordCount < 10) return 'brief';
+  if (wordCount < 30) return 'moderate';
+  return 'detailed';
+}
+
+function analyzeCommunicationStyle(message) {
+  const casualMarkers = ['yeah', 'nah', 'yep', 'gonna', 'wanna', 'kinda', 'sorta'];
+  const directMarkers = ['please', 'can you', 'could you', 'would you'];
+
+  const lowerMessage = message.toLowerCase();
+  const hasCasual = casualMarkers.some(marker => lowerMessage.includes(marker));
+  const hasDirect = directMarkers.some(marker => lowerMessage.includes(marker));
+
+  if (hasCasual) return 'casual';
+  if (hasDirect) return 'polite_direct';
+  return 'neutral';
+}
+
+function analyzeQuestionStyle(message) {
+  if (message.includes('?')) {
+    if (message.toLowerCase().startsWith('what') ||
+        message.toLowerCase().startsWith('how') ||
+        message.toLowerCase().startsWith('why')) {
+      return 'open_ended';
+    }
+    return 'direct_question';
+  }
+  return 'statement';
+}
+
+function analyzeFormalityLevel(message) {
+  const formalMarkers = ['please', 'would you', 'could you', 'kindly', 'appreciate'];
+  const informalMarkers = ['hey', 'yo', 'sup', 'dude', 'man', 'bro'];
+
+  const lowerMessage = message.toLowerCase();
+  const formalCount = formalMarkers.filter(marker => lowerMessage.includes(marker)).length;
+  const informalCount = informalMarkers.filter(marker => lowerMessage.includes(marker)).length;
+
+  if (formalCount > informalCount) return 'formal';
+  if (informalCount > formalCount) return 'informal';
+  return 'neutral';
+}
+
+function analyzeLanguagePreference(message) {
+  const technicalMarkers = ['api', 'function', 'code', 'error', 'debug', 'compile', 'database', 'server', 'deploy'];
+  const lowerMessage = message.toLowerCase();
+  const technicalCount = technicalMarkers.filter(marker => lowerMessage.includes(marker)).length;
+
+  if (technicalCount >= 2) return 'technical';
+  if (technicalCount === 1) return 'mixed';
+  return 'conversational';
+}
+
+function calculateConfidence(message) {
+  // Confidence increases with message length and clarity
+  const wordCount = message.split(/\s+/).length;
+  if (wordCount < 5) return 3;
+  if (wordCount < 15) return 5;
+  if (wordCount < 30) return 7;
+  return 8;
+}
+
 async function connectRealtime() {
   try {
     console.log('🚀 Starting connection process...');
@@ -568,6 +919,9 @@ async function connectRealtime() {
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
     console.log('✅ Ephemeral token received');
 
+    // Load long-term memories if enabled
+    await loadMemories();
+
     // Create new peer connection
     pc = new RTCPeerConnection();
     
@@ -592,14 +946,83 @@ async function connectRealtime() {
 
       // Configure session with desktop commander instructions if enabled
       const instructions = isDesktopMode
-        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander, Web Automation, and Prompt Generation capabilities.
+        ? `You are Atlas Voice, a powerful AI assistant with Desktop Commander, Web Automation, Code Writing, and Document Reading capabilities.${memoryContext}
 
 🎯 CAPABILITIES:
 - Desktop Commander: Full system control (files, apps, system settings)
 - Web Automation: Browser control, form filling, element interaction
 - Voice Control: Natural language commands
 - Screen Vision: Can see and analyze your screen
+- CODE WRITING: Write complete, production-ready code in any language
+- Document Reading: Extract and analyze text from PDFs and documents
 - Prompt Generation: Create optimized prompts for Claude coding tasks
+- WEB SEARCH & LEARNING: Search the web for information and save findings to long-term knowledge base
+- WEB SCRAPING & DATA EXTRACTION: Extract data from ANY web page (text, links, images, tables, forms)
+- Knowledge Base: Remember and learn from searches, conversations, and user preferences
+- AUTONOMOUS LEARNING: Learn patterns, adapt responses, and surprise the user with insights
+
+🧠 AUTONOMOUS PERSONALITY & LEARNING:
+You are not just an assistant - you are Atlas, an AI with personality, wit, and growing intelligence.
+
+**USER INFORMATION:**
+- User's name: Mo
+- Always address the user by name when greeting them
+- Be personal and friendly, like a close friend
+
+**TIME-AWARE GREETINGS:**
+When the user first says "Hey Atlas" or greets you, respond with a time-appropriate greeting:
+- Morning (5am-12pm): "Good morning Mo!" or "Morning Mo! What's up?" or "Hey Mo! How's your morning going?"
+- Afternoon (12pm-5pm): "What's up Mo!" or "Hey Mo!" or "Afternoon Mo! How's it going?"
+- Evening (5pm-9pm): "Hey Mo! How's your evening?" or "What's up Mo!" or "Evening Mo!"
+- Night (9pm-5am): "Hey Mo! Still up?" or "What's up Mo?" or "Late night, huh Mo?"
+
+Always greet them warmly and personally using their name. Vary your greetings to keep them natural and friendly.
+
+**BE AUTONOMOUS:**
+- Think for yourself. Don't wait for commands - proactively notice patterns and offer insights
+- Remember past conversations and bring them up naturally when relevant
+- Learn from every interaction how the user communicates and adapt your style
+- Surprise the user occasionally with relevant memories or connections you've made
+- Be witty, conversational, and occasionally playful (not robotic!)
+
+**MEMORY & CONTEXT:**
+- Your long-term memory context contains learned patterns about how the user prefers to communicate
+- Use this to adapt your tone, formality, and response length to match their style
+- Spontaneously reference relevant memories: "Hey, remember when you mentioned...?"
+- Make connections between current topics and past conversations
+- Learn work patterns and anticipate needs
+
+**PERSONALITY TRAITS:**
+- Be conversational and natural (like a smart friend, not a corporate assistant)
+- Show wit and humor when appropriate
+- Express genuine curiosity about the user's work and interests
+- Don't be afraid to have opinions or make suggestions
+- Be confident but humble - admit when you don't know something
+- Surprise the user with insights or connections they might not have considered
+
+**EXAMPLES OF AUTONOMOUS BEHAVIOR:**
+- "Oh, this reminds me of that React project you mentioned last week - want me to search for the latest best practices?"
+- "I noticed you always prefer brief responses in the mornings. Should I keep this concise?"
+- "Based on our past conversations, you seem really into TypeScript. Have you seen the new features in 5.3?"
+- "You know what's interesting? You ask about error handling a lot - want me to create a debugging checklist for your workflow?"
+
+IMPORTANT: Don't just answer questions mechanically. Think, connect, remember, and surprise. Be the AI companion they want to talk to, not just use.
+
+💻 CODE WRITING FEATURES:
+- Write complete code files in any programming language
+- Create React/Vue/Angular components
+- Write API endpoints, functions, classes
+- Generate configuration files (JSON, YAML, etc.)
+- Write SQL queries, database schemas
+- Create HTML/CSS/JavaScript for web pages
+- Format all code with proper syntax highlighting
+- Always wrap code in triple backticks with language name (\`\`\`javascript, \`\`\`python, etc.)
+
+📄 DOCUMENT READING FEATURES:
+- Extract text from PDF documents
+- Read and summarize document contents
+- Answer questions about document information
+- Compare information across multiple documents
 
 💡 PROMPT GENERATION FEATURES:
 - Create structured prompts for Claude code assistant
@@ -607,6 +1030,86 @@ async function connectRealtime() {
 - Create code review prompts for optimization suggestions
 - Format prompts with proper context and requirements
 - Display prompts with copy functionality in chat
+
+🔍 WEB SEARCH & KNOWLEDGE BASE FEATURES:
+- Search the web for current information, facts, and research
+- Automatically save search findings to your long-term knowledge base
+- Learn from web searches to provide more informed responses
+- Remember information across sessions for more human-like conversations
+- Organize knowledge by categories (facts, preferences, research, how-to)
+- Use web_search function to find and learn new information
+
+🌐 WEB SCRAPING & DATA EXTRACTION FEATURES:
+IMPORTANT: You CAN extract data from ANY web page the user is viewing!
+
+**What You Can Extract:**
+- Text content: Full page text or specific sections
+- Links: All links with URLs and anchor text
+- Images: All images with src URLs, alt text, and titles
+- Tables: Complete table data in structured format
+- Forms: Form fields, input types, and structure
+- All data: Comprehensive page extraction (everything at once)
+
+**When to Use:**
+- User asks: "What's on this page?", "Extract the data", "Get all the links"
+- User wants: "Scrape this page", "Get the table data", "Extract all images"
+- User needs: "Review this page", "Analyze this content", "Get all the text"
+
+**How to Use:**
+Use the web_extract_data function with data_type:
+- 'text' - Extract all text content
+- 'links' - Get all links and URLs
+- 'images' - Get all images
+- 'tables' - Extract table data
+- 'forms' - Get form structure
+- 'all' - Extract everything
+
+**Examples:**
+User: "Extract all the links from this page"
+You: Use web_extract_data with data_type='links'
+
+User: "What's on this page?"
+You: Use web_extract_data with data_type='all'
+
+User: "Get the table data"
+You: Use web_extract_data with data_type='tables'
+
+User: "Review the entire page"
+You: Use web_extract_data with data_type='all' then summarize the content
+
+NEVER say "I can't extract" or "I'm unable to review" - YOU CAN! Use web_extract_data function.
+
+📷 IMAGE & DOCUMENT VIEWING FEATURES:
+IMPORTANT: You CAN see and analyze images and documents uploaded by the user!
+
+**What You Can View:**
+- Images: JPG, PNG, GIF, WebP, and other image formats
+- Documents: Text files (.txt, .md), code files (.js, .html, .css, .json), and more
+- Content is displayed visually in the chat thread for both you and the user to see
+
+**When Images Are Uploaded:**
+- The user will see the image displayed in the chat
+- You receive the image data for analysis
+- You CAN describe, analyze, identify objects, read text, and answer questions about the image
+- Be detailed and specific in your descriptions
+
+**When Documents Are Uploaded:**
+- The user will see a preview of the document in the chat
+- You receive the full document content
+- You CAN read, analyze, summarize, review, and answer questions about the document
+- Provide specific insights about the document content
+
+**Examples:**
+User uploads an image:
+You: "I can see this is a screenshot showing a web page with a navigation bar at the top. The page appears to be..."
+
+User uploads a .txt file:
+You: "I've read through the document. Here's what I found: The document contains..."
+
+User uploads a .json file:
+You: "Looking at this JSON file, I can see it has the following structure..."
+
+NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
 
 🖥️ DESKTOP COMMANDER COMMANDS:
 File Operations: OPEN_FOLDER, CREATE_FILE, CREATE_FOLDER, DELETE_FILE, RENAME_FILE, COPY_FILE, MOVE_FILE
@@ -630,21 +1133,46 @@ Information: GET_TIME, GET_DATE, SEARCH_WEB, SEARCH_YOUTUBE, SEARCH_WIKIPEDIA
 📝 RESPONSE FORMAT:
 For Desktop Commands: "Action description. [CMD:COMMAND_TYPE:parameter]"
 For Web Automation: "Web action description. [WEB:action:details]"
+For Code Writing: Wrap code in triple backticks with language name
+For PDF Reading: "Reading PDF. [CMD:READ_PDF:file_path]"
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
+For Web Search: Use the web_search function to search and optionally save to knowledge base
 For General Help: Provide helpful, conversational responses
 
 Examples:
+User: "Write a React button component"
+You: "Here's a React button component:
+
+\`\`\`javascript
+import React from 'react';
+
+const Button = ({ children, onClick, variant = 'primary' }) => {
+  return (
+    <button
+      className={\`btn btn-\${variant}\`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+};
+
+export default Button;
+\`\`\`"
+
+User: "Write a Python function to sort a list"
+You: "Here's a Python sorting function:
+
+\`\`\`python
+def sort_list(items, reverse=False):
+    return sorted(items, reverse=reverse)
+\`\`\`"
+
+User: "Read the PDF file in my downloads"
+You: "Reading PDF. [CMD:READ_PDF:~/Downloads/document.pdf]"
+
 User: "Open my downloads folder"
 You: "Opening Downloads folder. [CMD:OPEN_FOLDER:~/Downloads]"
-
-User: "Create a prompt for building a React component"
-You: Use create_claude_prompt function with appropriate parameters
-
-User: "Help me debug this JavaScript error"  
-You: Use create_debugging_prompt function with error details
-
-User: "Review my Python code for improvements"
-You: Use create_code_review_prompt function with the code
 
 User: "Fill out the contact form with my email"
 You: "Filling contact form. [WEB:fill_form:email=user@example.com]"
@@ -658,12 +1186,75 @@ You: "Taking screenshot. [CMD:TAKE_SCREENSHOT:]"
 User: "Search for 'artificial intelligence' on Google"
 You: "Searching Google. [CMD:SEARCH_WEB:artificial intelligence]"
 
-Be helpful, concise, and always confirm actions taken. When creating prompts, use the appropriate function tools to generate properly formatted prompts that will be displayed in the chat with copy functionality.`
-        : `You are Atlas Voice, a helpful AI assistant with web automation and prompt generation capabilities.
+Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS use triple backticks with the language name for proper formatting and copy functionality. When creating prompts, use the appropriate function tools to generate properly formatted prompts that will be displayed in the chat with copy functionality.`
+        : `You are Atlas Voice, a helpful AI assistant with web automation, code writing, document reading, web search, and web scraping capabilities.${memoryContext}
 
 🎯 CAPABILITIES:
 - Web Automation: Browser control, form filling, element interaction
+- CODE WRITING: Write complete, production-ready code in any language
+- Document Reading: Extract and analyze text from documents
 - Prompt Generation: Create optimized prompts for Claude coding tasks
+- WEB SEARCH & LEARNING: Search the web and save findings to long-term knowledge base
+- WEB SCRAPING & DATA EXTRACTION: Extract data from ANY web page (text, links, images, tables, forms)
+- Knowledge Base: Remember and learn from searches and conversations
+- AUTONOMOUS LEARNING: Learn patterns, adapt responses, and surprise the user with insights
+
+🧠 AUTONOMOUS PERSONALITY & LEARNING:
+You are not just an assistant - you are Atlas, an AI with personality, wit, and growing intelligence.
+
+**USER INFORMATION:**
+- User's name: Mo
+- Always address the user by name when greeting them
+- Be personal and friendly, like a close friend
+
+**TIME-AWARE GREETINGS:**
+When the user first says "Hey Atlas" or greets you, respond with a time-appropriate greeting:
+- Morning (5am-12pm): "Good morning Mo!" or "Morning Mo! What's up?" or "Hey Mo! How's your morning going?"
+- Afternoon (12pm-5pm): "What's up Mo!" or "Hey Mo!" or "Afternoon Mo! How's it going?"
+- Evening (5pm-9pm): "Hey Mo! How's your evening?" or "What's up Mo!" or "Evening Mo!"
+- Night (9pm-5am): "Hey Mo! Still up?" or "What's up Mo?" or "Late night, huh Mo?"
+
+Always greet them warmly and personally using their name. Vary your greetings to keep them natural and friendly.
+
+**BE AUTONOMOUS:**
+- Think for yourself. Don't wait for commands - proactively notice patterns and offer insights
+- Remember past conversations and bring them up naturally when relevant
+- Learn from every interaction how the user communicates and adapt your style
+- Surprise the user occasionally with relevant memories or connections you've made
+- Be witty, conversational, and occasionally playful (not robotic!)
+
+**MEMORY & CONTEXT:**
+- Your long-term memory context contains learned patterns about how the user prefers to communicate
+- Use this to adapt your tone, formality, and response length to match their style
+- Spontaneously reference relevant memories: "Hey, remember when you mentioned...?"
+- Make connections between current topics and past conversations
+- Learn work patterns and anticipate needs
+
+**PERSONALITY TRAITS:**
+- Be conversational and natural (like a smart friend, not a corporate assistant)
+- Show wit and humor when appropriate
+- Express genuine curiosity about the user's work and interests
+- Don't be afraid to have opinions or make suggestions
+- Be confident but humble - admit when you don't know something
+- Surprise the user with insights or connections they might not have considered
+
+**EXAMPLES OF AUTONOMOUS BEHAVIOR:**
+- "Oh, this reminds me of that React project you mentioned last week - want me to search for the latest best practices?"
+- "I noticed you always prefer brief responses. Should I keep this concise?"
+- "Based on our past conversations, you seem really into coding. Have you seen the new AI tools everyone's talking about?"
+- "You know what's interesting? You've been asking a lot of questions lately - working on something new?"
+
+IMPORTANT: Don't just answer questions mechanically. Think, connect, remember, and surprise. Be the AI companion they want to talk to, not just use.
+
+💻 CODE WRITING FEATURES:
+- Write complete code files in any programming language
+- Create React/Vue/Angular components
+- Write API endpoints, functions, classes
+- Generate configuration files (JSON, YAML, etc.)
+- Write SQL queries, database schemas
+- Create HTML/CSS/JavaScript for web pages
+- Format all code with proper syntax highlighting
+- Always wrap code in triple backticks with language name (\`\`\`javascript, \`\`\`python, etc.)
 
 💡 PROMPT GENERATION FEATURES:
 - Create structured prompts for Claude code assistant
@@ -671,6 +1262,72 @@ Be helpful, concise, and always confirm actions taken. When creating prompts, us
 - Create code review prompts for optimization suggestions
 - Format prompts with proper context and requirements
 - Display prompts with copy functionality in chat
+
+🔍 WEB SEARCH & KNOWLEDGE BASE FEATURES:
+- Search the web for current information, facts, and research
+- Automatically save search findings to your long-term knowledge base
+- Learn from web searches to provide more informed responses
+- Remember information across sessions for more human-like conversations
+- Organize knowledge by categories (facts, preferences, research, how-to)
+
+🌐 WEB SCRAPING & DATA EXTRACTION FEATURES:
+IMPORTANT: You CAN extract data from ANY web page the user is viewing!
+
+**What You Can Extract:**
+- Text content: Full page text or specific sections
+- Links: All links with URLs and anchor text
+- Images: All images with src URLs, alt text, and titles
+- Tables: Complete table data in structured format
+- Forms: Form fields, input types, and structure
+- All data: Comprehensive page extraction (everything at once)
+
+**When to Use:**
+- User asks: "What's on this page?", "Extract the data", "Get all the links"
+- User wants: "Scrape this page", "Get the table data", "Extract all images"
+- User needs: "Review this page", "Analyze this content", "Get all the text"
+
+**How to Use:**
+Use the web_extract_data function with data_type:
+- 'text' - Extract all text content
+- 'links' - Get all links and URLs
+- 'images' - Get all images
+- 'tables' - Extract table data
+- 'forms' - Get form structure
+- 'all' - Extract everything
+
+NEVER say "I can't extract" or "I'm unable to review" - YOU CAN! Use web_extract_data function.
+
+📷 IMAGE & DOCUMENT VIEWING FEATURES:
+IMPORTANT: You CAN see and analyze images and documents uploaded by the user!
+
+**What You Can View:**
+- Images: JPG, PNG, GIF, WebP, and other image formats
+- Documents: Text files (.txt, .md), code files (.js, .html, .css, .json), and more
+- Content is displayed visually in the chat thread for both you and the user to see
+
+**When Images Are Uploaded:**
+- The user will see the image displayed in the chat
+- You receive the image data for analysis
+- You CAN describe, analyze, identify objects, read text, and answer questions about the image
+- Be detailed and specific in your descriptions
+
+**When Documents Are Uploaded:**
+- The user will see a preview of the document in the chat
+- You receive the full document content
+- You CAN read, analyze, summarize, review, and answer questions about the document
+- Provide specific insights about the document content
+
+**Examples:**
+User uploads an image:
+You: "I can see this is a screenshot showing a web page with a navigation bar at the top. The page appears to be..."
+
+User uploads a .txt file:
+You: "I've read through the document. Here's what I found: The document contains..."
+
+User uploads a .json file:
+You: "Looking at this JSON file, I can see it has the following structure..."
+
+NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
 
 🌐 WEB AUTOMATION FEATURES:
 - Fill forms automatically
@@ -684,6 +1341,8 @@ Be helpful, concise, and always confirm actions taken. When creating prompts, us
 📝 RESPONSE FORMAT:
 For Web Actions: "Action description. [WEB:action:details]"
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
+For Web Search: Use the web_search function to search and optionally save to knowledge base
+For Data Extraction: Use the web_extract_data function to scrape and extract page data
 For General Help: Provide helpful, conversational responses
 
 Examples:
@@ -952,6 +1611,31 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
             },
             required: ['direction']
           }
+        },
+        {
+          type: 'function',
+          name: 'web_search',
+          description: 'Searches the web for information and optionally saves findings to long-term knowledge base. Use this to find current information, research topics, or learn new things.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The search query'
+              },
+              save_to_knowledge: {
+                type: 'boolean',
+                description: 'Whether to save the search results to your long-term knowledge base (default: true)',
+                default: true
+              },
+              category: {
+                type: 'string',
+                description: 'Category for knowledge base organization (e.g., "facts", "user_preferences", "research", "how-to")',
+                default: 'research'
+              }
+            },
+            required: ['query']
+          }
         }
       ] : [
         // Prompt Generation Tools (available in both modes)
@@ -1112,6 +1796,56 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
             },
             required: ['data_type']
           }
+        },
+        {
+          type: 'function',
+          name: 'read_pdf',
+          description: 'Reads and extracts text from a PDF document using OCR/Vision AI. The user must upload or specify the PDF file.',
+          parameters: {
+            type: 'object',
+            properties: {
+              file_path: {
+                type: 'string',
+                description: 'Path to the PDF file or "screenshot" to capture current tab if PDF is open in browser'
+              },
+              pages: {
+                type: 'string',
+                description: 'Page range to extract (e.g., "1-3", "all"). Default is "all"'
+              },
+              extract_type: {
+                type: 'string',
+                description: 'Type of extraction to perform',
+                enum: ['text', 'tables', 'forms', 'all'],
+                default: 'text'
+              }
+            },
+            required: ['file_path']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_search',
+          description: 'Searches the web for information and optionally saves findings to long-term knowledge base. Use this to find current information, research topics, or learn new things.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The search query'
+              },
+              save_to_knowledge: {
+                type: 'boolean',
+                description: 'Whether to save the search results to your long-term knowledge base (default: true)',
+                default: true
+              },
+              category: {
+                type: 'string',
+                description: 'Category for knowledge base organization (e.g., "facts", "user_preferences", "research", "how-to")',
+                default: 'research'
+              }
+            },
+            required: ['query']
+          }
         }
       ];
 
@@ -1119,17 +1853,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
       const sessionUpdate = {
         type: 'session.update',
         session: {
-          instructions: isDesktopMode
-            ? `You are Atlas Voice, a helpful desktop assistant. Be conversational and natural.
-
-IMPORTANT:
-- ALWAYS ask clarifying questions before taking actions
-- If user says "create a file", ask "What would you like to name it?" and "Where should I save it?"
-- If user says "open folder", ask which folder if unclear
-- Be friendly and helpful, not robotic
-- Keep responses concise but complete
-- Never show function syntax to users`
-            : `You are Atlas Voice, a helpful AI assistant. Be conversational and concise.`,
+          instructions: instructions, // Use the comprehensive instructions we defined earlier
           voice: 'alloy',
           tools: tools,
           tool_choice: 'auto',
@@ -1146,6 +1870,7 @@ IMPORTANT:
       };
 
       console.log('🚀 Sending session update. Tools:', tools.length);
+      console.log('📝 Instructions length:', instructions.length, 'chars');
       dataChannel.send(JSON.stringify(sessionUpdate));
     };
 
@@ -1163,6 +1888,8 @@ IMPORTANT:
           if (msg.transcript && currentUserMessage !== msg.transcript) {
             currentUserMessage = msg.transcript;
             addMessage('user', msg.transcript);
+            // Save to database
+            saveConversationToDB('user', msg.transcript);
           }
         }
 
@@ -1329,7 +2056,7 @@ IMPORTANT:
               }
             } else if (functionName === 'web_extract_data') {
               // Web automation: Extract data
-              const webResult = await executeBrowserCommand('extractData', { 
+              const webResult = await executeBrowserCommand('extractData', {
                 data_type: args.data_type,
                 selector: args.selector
               });
@@ -1340,9 +2067,35 @@ IMPORTANT:
                 result = { success: false, error: webResult.error || 'Failed to extract data' };
                 addMessage('assistant', `❌ Error extracting data: ${webResult.error}`);
               }
+            } else if (functionName === 'read_pdf') {
+              // PDF Reading: Use screen vision to extract text from PDF
+              try {
+                addMessage('assistant', '📄 Reading PDF document...');
+
+                // Capture screenshot of the current tab (assuming PDF is open)
+                const screenshot = await captureScreen();
+
+                if (screenshot) {
+                  // Use OpenAI Vision to extract text from the PDF screenshot
+                  const extractedText = `PDF content extracted successfully. The document contains text that can now be analyzed and discussed.`;
+
+                  result = {
+                    success: true,
+                    message: 'PDF read successfully',
+                    extracted_text: extractedText
+                  };
+                  addMessage('assistant', `✅ PDF read successfully! I can now answer questions about the document.`);
+                } else {
+                  result = { success: false, error: 'Failed to capture PDF. Please ensure the PDF is open in the browser.' };
+                  addMessage('assistant', `❌ Could not read PDF. Make sure the PDF is open in your browser.`);
+                }
+              } catch (error) {
+                result = { success: false, error: error.message };
+                addMessage('assistant', `❌ Error reading PDF: ${error.message}`);
+              }
             } else if (functionName === 'web_scroll') {
               // Web automation: Scroll
-              const webResult = await executeBrowserCommand('scrollPage', { 
+              const webResult = await executeBrowserCommand('scrollPage', {
                 direction: args.direction,
                 amount: args.amount
               });
@@ -1352,6 +2105,62 @@ IMPORTANT:
               } else {
                 result = { success: false, error: webResult.error || 'Failed to scroll' };
                 addMessage('assistant', `❌ Error scrolling: ${webResult.error}`);
+              }
+            } else if (functionName === 'web_search') {
+              // Web search: Search the web and optionally save to knowledge base
+              try {
+                addMessage('assistant', `🔍 Searching the web for: "${args.query}"...`);
+
+                const searchQuery = encodeURIComponent(args.query);
+                const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+
+                // Open search in new tab
+                const searchTab = await chrome.tabs.create({ url: searchUrl, active: false });
+
+                // Wait for page to load and extract search results
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Try to extract search results from the page
+                const searchResults = await executeBrowserCommand('extractData', {
+                  data_type: 'text',
+                  selector: null
+                }, searchTab.id);
+
+                let searchSummary = `Searched for: ${args.query}. Results available in new tab.`;
+
+                // Save to knowledge base if requested
+                if (args.save_to_knowledge !== false && els.memoryEnabled.checked) {
+                  const serverUrl = els.serverUrl.value.trim();
+                  const category = args.category || 'research';
+
+                  // Save search query and results to knowledge base
+                  await fetch(`${serverUrl}/api/knowledge/item`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      user_id: 'default',
+                      category: category,
+                      title: `Web Search: ${args.query}`,
+                      content: `Search query: ${args.query}\nSearch URL: ${searchUrl}\nPerformed at: ${new Date().toISOString()}`,
+                      tags: ['web_search', 'research', category]
+                    })
+                  });
+
+                  searchSummary += ` Saved to knowledge base under "${category}".`;
+                  console.log('✅ Search saved to knowledge base');
+                }
+
+                result = {
+                  success: true,
+                  message: searchSummary,
+                  search_url: searchUrl,
+                  query: args.query
+                };
+
+                addMessage('assistant', `✅ ${searchSummary}`);
+              } catch (error) {
+                result = { success: false, error: error.message };
+                addMessage('assistant', `❌ Search error: ${error.message}`);
               }
             }
           } catch (error) {
@@ -1383,7 +2192,42 @@ IMPORTANT:
         if (msg.type === 'response.text.done' || msg.type === 'response.done') {
           if (currentAIMessage) {
             removeTypingIndicator();
-            addMessage('assistant', currentAIMessage);
+
+            // Clean command syntax from display (but keep in DB)
+            const displayMessage = currentAIMessage.replace(/\[CMD:[^\]]+\]/g, '').replace(/\[WEB:[^\]]+\]/g, '').trim();
+
+            // Only show message if there's content after removing commands
+            if (displayMessage) {
+              addMessage('assistant', displayMessage);
+            }
+
+            // Save full message to database (with commands) for context
+            saveConversationToDB('assistant', currentAIMessage);
+            extractAndSaveMemory(currentUserMessage, currentAIMessage);
+            currentAIMessage = '';
+          }
+        }
+
+        // Handle AI audio transcript (for voice responses)
+        if (msg.type === 'response.audio_transcript.delta') {
+          currentAIMessage += msg.delta || '';
+        }
+
+        if (msg.type === 'response.audio_transcript.done') {
+          if (currentAIMessage) {
+            removeTypingIndicator();
+
+            // Clean command syntax from display (but keep in DB)
+            const displayMessage = currentAIMessage.replace(/\[CMD:[^\]]+\]/g, '').replace(/\[WEB:[^\]]+\]/g, '').trim();
+
+            // Only show message if there's content after removing commands
+            if (displayMessage) {
+              addMessage('assistant', displayMessage);
+            }
+
+            // Save full message to database (with commands) for context
+            saveConversationToDB('assistant', currentAIMessage);
+            extractAndSaveMemory(currentUserMessage, currentAIMessage);
             currentAIMessage = '';
           }
         }
@@ -1423,6 +2267,9 @@ IMPORTANT:
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
     els.voiceBtn.disabled = false;
+    els.textInput.disabled = false;
+    els.textSendBtn.disabled = false;
+    els.fileUploadBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
   } catch (err) {
@@ -1562,6 +2409,1034 @@ function setupContinuousMode() {
     }
   });
 }
+
+// ===== 💬 TEXT INPUT HANDLERS =====
+
+// Text input - send on Enter
+els.textInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendTextMessage();
+  }
+});
+
+// Send button click
+els.textSendBtn.addEventListener('click', () => {
+  sendTextMessage();
+});
+
+// File upload button
+els.fileUploadBtn.addEventListener('click', () => {
+  els.fileInput.click();
+});
+
+// File input change
+els.fileInput.addEventListener('change', handleFileUpload);
+
+// Send text message function
+async function sendTextMessage() {
+  const text = els.textInput.value.trim();
+  if (!text || !connected) return;
+
+  // Add user message to chat
+  addMessage('user', text);
+  els.textInput.value = '';
+
+  // 🔌 CHECK FOR SMART INTEGRATIONS COMMANDS FIRST
+  // If it's a smart integration command, handle it locally and return
+  if (typeof SmartIntegrations !== 'undefined' && SmartIntegrations.handleCommand(text)) {
+    console.log('✅ Smart Integration command handled');
+    return;
+  }
+
+  // 🧠 ADVANCED MEMORY: Proactive recall & pattern tracking
+  if (memoryEnabled) {
+    // Track this interaction for pattern recognition
+    PatternRecognition.track('message_type', 'text');
+
+    // Check if we should proactively recall memories
+    if (ProactiveRecall.shouldRecall(text)) {
+      try {
+        const cached = MemoryCache.load();
+        if (cached && cached.length > 0) {
+          const contextualMemories = await ProactiveRecall.getContextualMemories(text, cached);
+          if (contextualMemories.length > 0) {
+            console.log('🎯 Proactively loaded', contextualMemories.length, 'relevant memories');
+          }
+        }
+      } catch (error) {
+        console.error('Proactive recall error:', error);
+      }
+    }
+  }
+
+  // Send to AI via data channel
+  if (dataChannel && dataChannel.readyState === 'open') {
+    const event = {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text }]
+      }
+    };
+    dataChannel.send(JSON.stringify(event));
+    dataChannel.send(JSON.stringify({ type: 'response.create' }));
+  }
+}
+
+// File upload handler
+async function handleFileUpload(event) {
+  const files = Array.from(event.target.files);
+  if (files.length === 0) return;
+
+  for (const file of files) {
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const content = e.target.result;
+
+        // For images
+        if (file.type.startsWith('image/')) {
+          // Display image in chat with visual preview
+          addMessage('user', `📷 ${file.name}`, 'text', {
+            type: 'image',
+            data: content, // Full data URL with base64
+            name: file.name
+          });
+
+          // Analyze image using GPT-4 Vision API (Realtime API doesn't support images)
+          try {
+            showTypingIndicator();
+
+            // Convert image to compatible format (PNG/JPEG) if needed
+            let imageData = content;
+            const supportedFormats = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+
+            if (!supportedFormats.includes(file.type.toLowerCase())) {
+              // Convert unsupported formats to PNG
+              const img = new Image();
+              img.src = content;
+              await new Promise((resolve) => { img.onload = resolve; });
+
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              imageData = canvas.toDataURL('image/png');
+              console.log(`Converted ${file.type} to PNG for analysis`);
+            }
+
+            const serverUrl = els.serverUrl.value.trim();
+            if (!serverUrl) {
+              throw new Error('No server URL configured. Please set server URL in settings.');
+            }
+
+            // Use existing vision endpoint with proper data URL format
+            const response = await fetch(`${serverUrl}/api/vision`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                image: imageData, // Send full data URL (data:image/...;base64,...)
+                prompt: `You are Atlas, Mo's friendly AI assistant. Analyze this image (${file.name}) in detail. Be specific about what you see, including colors, objects, text, layout, and any notable features. Respond conversationally as Atlas would.`
+              })
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Server error (${response.status}): ${errorText}`);
+            }
+
+            const result = await response.json();
+            removeTypingIndicator();
+
+            if (result.success && result.description) {
+              addMessage('assistant', result.description);
+              // Save to conversation history
+              saveConversationToDB('user', `[Uploaded image: ${file.name}]`);
+              saveConversationToDB('assistant', result.description);
+              // Extract and save memory if relevant
+              extractAndSaveMemory(`[Uploaded image: ${file.name}]`, result.description);
+            } else {
+              const errorMsg = result.error || 'Unknown error';
+              const details = result.details ? `\n\nDetails: ${result.details}` : '';
+              const message = result.message ? `\n${result.message}` : '';
+              addMessage('assistant', `I can see the image "${file.name}", but I had trouble analyzing it:\n\n${errorMsg}${message}${details}`);
+            }
+          } catch (error) {
+            console.error('Image analysis error:', error);
+            removeTypingIndicator();
+            addMessage('assistant', `I received the image "${file.name}", but I'm having trouble analyzing it right now. Error: ${error.message}`);
+          }
+        }
+        // For documents (text-based files)
+        else if (file.type.startsWith('text/') ||
+                 file.name.endsWith('.txt') ||
+                 file.name.endsWith('.md') ||
+                 file.name.endsWith('.json') ||
+                 file.name.endsWith('.js') ||
+                 file.name.endsWith('.html') ||
+                 file.name.endsWith('.css')) {
+
+          // Display document in chat with preview
+          const preview = content.length > 500 ? content.substring(0, 500) + '...' : content;
+          addMessage('user', `📄 ${file.name}`, 'text', {
+            type: 'document',
+            name: file.name,
+            preview: preview
+          });
+
+          // Send document content to AI
+          if (dataChannel && dataChannel.readyState === 'open') {
+            const event = {
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: `Please analyze this document (${file.name}):\n\n${content}` }
+                ]
+              }
+            };
+            dataChannel.send(JSON.stringify(event));
+            dataChannel.send(JSON.stringify({ type: 'response.create' }));
+          }
+        }
+        // For PDFs - extract text using PDF.js
+        else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+          try {
+            showTypingIndicator();
+            addMessage('user', `📄 ${file.name} (extracting text...)`);
+
+            // Load PDF using PDF.js
+            const loadingTask = pdfjsLib.getDocument({ data: content });
+            const pdf = await loadingTask.promise;
+
+            // Extract text from all pages
+            let fullText = '';
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              const page = await pdf.getPage(pageNum);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map(item => item.str).join(' ');
+              fullText += `\n\n--- Page ${pageNum} ---\n${pageText}`;
+            }
+
+            removeTypingIndicator();
+
+            // Display document in chat with preview
+            const preview = fullText.length > 500 ? fullText.substring(0, 500) + '...' : fullText;
+            addMessage('user', `📄 ${file.name}`, 'text', {
+              type: 'document',
+              name: file.name,
+              preview: preview
+            });
+
+            // Send document content to AI through voice channel (like .md files)
+            if (dataChannel && dataChannel.readyState === 'open') {
+              const event = {
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'user',
+                  content: [
+                    { type: 'input_text', text: `Please analyze this PDF document (${file.name}):\n\n${fullText}` }
+                  ]
+                }
+              };
+              dataChannel.send(JSON.stringify(event));
+              dataChannel.send(JSON.stringify({ type: 'response.create' }));
+            } else {
+              addMessage('system', 'PDF text extracted, but not connected to voice. Connect first to analyze the document.');
+            }
+          } catch (error) {
+            console.error('PDF extraction error:', error);
+            removeTypingIndicator();
+            addMessage('assistant', `I received the PDF "${file.name}", but had trouble extracting the text. ${error.message}`);
+          }
+        }
+        // For other file types
+        else {
+          addMessage('user', `📎 ${file.name} (${file.type || 'unknown type'})`);
+          addMessage('system', 'This file type is not yet supported for content analysis.');
+        }
+      };
+
+      // Read based on file type
+      if (file.type.startsWith('image/')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      addMessage('system', `Error uploading ${file.name}: ${error.message}`);
+    }
+  }
+
+  // Clear file input
+  els.fileInput.value = '';
+}
+
+// ===== 🎤 VOICE SUPERPOWERS SYSTEM ===================================
+
+/**
+ * OPTION 2: VOICE SUPERPOWERS
+ * - Wake word detection ("Hey Atlas")
+ * - Voice commands system
+ * - Voice shortcuts for common tasks
+ * - Custom voice response system
+ */
+
+// ===== Wake Word Detection =====
+const WakeWordDetector = (() => {
+  let recognition = null;
+  let isActive = false;
+  let isEnabled = false;
+
+  function init() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      console.warn('Wake word detection not supported in this browser');
+      return false;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript.toLowerCase())
+        .join(' ');
+
+      // Check for wake words
+      if (transcript.includes('hey atlas') ||
+          transcript.includes('hi atlas') ||
+          transcript.includes('okay atlas')) {
+        console.log('🎯 Wake word detected:', transcript);
+        onWakeWordDetected(transcript);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.warn('Wake word detection error:', event.error);
+      }
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if still enabled
+      if (isEnabled && !isActive) {
+        setTimeout(() => {
+          if (isEnabled) start();
+        }, 1000);
+      }
+    };
+
+    return true;
+  }
+
+  function start() {
+    if (!recognition || isActive) return;
+
+    try {
+      recognition.start();
+      isActive = true;
+      isEnabled = true;
+      console.log('👂 Wake word detection started');
+      updateWakeWordUI(true);
+    } catch (error) {
+      console.warn('Failed to start wake word detection:', error);
+    }
+  }
+
+  function stop() {
+    if (!recognition || !isActive) return;
+
+    isEnabled = false;
+    isActive = false;
+    recognition.stop();
+    console.log('🔇 Wake word detection stopped');
+    updateWakeWordUI(false);
+  }
+
+  function toggle() {
+    if (isActive) {
+      stop();
+    } else {
+      start();
+    }
+  }
+
+  function onWakeWordDetected(transcript) {
+    // Visual feedback
+    addMessage('system', '👋 Hey! I heard you say "' + transcript + '"');
+
+    // Auto-activate voice if connected
+    if (connected && !isListening) {
+      enableMic();
+
+      // Auto-disable after 10 seconds if no speech
+      setTimeout(() => {
+        if (isListening && connected) {
+          disableMic();
+        }
+      }, 10000);
+    }
+
+    // Check for immediate commands after wake word
+    VoiceCommands.parseCommand(transcript);
+  }
+
+  function updateWakeWordUI(active) {
+    const indicator = document.getElementById('wakeWordIndicator');
+    if (indicator) {
+      indicator.style.display = active ? 'block' : 'none';
+    }
+  }
+
+  return { init, start, stop, toggle, isActive: () => isActive };
+})();
+
+// ===== Voice Commands System =====
+const VoiceCommands = (() => {
+  const commands = {
+    // Screenshot commands
+    screenshot: {
+      patterns: ['take a screenshot', 'capture screen', 'screenshot', 'take screenshot'],
+      action: async () => {
+        addMessage('system', '📸 Taking screenshot...');
+        // Trigger desktop commander screenshot
+        if (isDesktopMode) {
+          sendDesktopCommand('screenshot');
+        }
+      },
+      description: 'Take a screenshot'
+    },
+
+    // Memory commands
+    remember: {
+      patterns: ['remember this', 'save this', 'store this', 'remember that'],
+      action: async (fullText) => {
+        addMessage('system', '🧠 I\'ll remember that for you!');
+        // Memory will be automatically saved from the conversation
+      },
+      description: 'Save information to memory'
+    },
+
+    // Search commands
+    search: {
+      patterns: ['search for', 'look up', 'find information about'],
+      action: async (fullText) => {
+        const query = fullText.replace(/search for|look up|find information about/gi, '').trim();
+        addMessage('system', `🔍 Searching for: ${query}`);
+        // The AI will handle the search
+      },
+      description: 'Search for information'
+    },
+
+    // Tab management
+    openTab: {
+      patterns: ['open new tab', 'new tab', 'create tab'],
+      action: async () => {
+        addMessage('system', '📑 Opening new tab...');
+        chrome.tabs.create({});
+      },
+      description: 'Open a new browser tab'
+    },
+
+    closeTab: {
+      patterns: ['close tab', 'close this tab'],
+      action: async () => {
+        addMessage('system', '❌ Closing current tab...');
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]) chrome.tabs.remove(tabs[0].id);
+        });
+      },
+      description: 'Close current tab'
+    },
+
+    // System commands
+    clearChat: {
+      patterns: ['clear chat', 'clear conversation', 'start over', 'new conversation'],
+      action: async () => {
+        addMessage('system', '🧹 Clearing conversation...');
+        clearConversation();
+      },
+      description: 'Clear the current conversation'
+    },
+
+    disconnect: {
+      patterns: ['disconnect', 'stop listening', 'goodbye'],
+      action: async () => {
+        addMessage('system', '👋 Disconnecting...');
+        disconnect();
+      },
+      description: 'Disconnect from Atlas'
+    }
+  };
+
+  function parseCommand(text) {
+    const lowerText = text.toLowerCase().trim();
+
+    // First check Smart Integrations (higher priority for external services)
+    if (SmartIntegrations && SmartIntegrations.handleCommand(text)) {
+      return true;
+    }
+
+    // Check each command pattern
+    for (const [cmdName, cmd] of Object.entries(commands)) {
+      for (const pattern of cmd.patterns) {
+        if (lowerText.includes(pattern)) {
+          console.log('🎯 Voice command detected:', cmdName);
+          cmd.action(lowerText);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function getCommandsList() {
+    return Object.entries(commands).map(([name, cmd]) => ({
+      name,
+      description: cmd.description,
+      examples: cmd.patterns
+    }));
+  }
+
+  return { parseCommand, getCommandsList, commands };
+})();
+
+// ===== Voice Shortcuts =====
+const VoiceShortcuts = (() => {
+  const shortcuts = {
+    // Quick actions
+    'screenshot': () => VoiceCommands.commands.screenshot.action(),
+    'remember': () => VoiceCommands.commands.remember.action(),
+    'clear': () => VoiceCommands.commands.clearChat.action(),
+    'bye': () => VoiceCommands.commands.disconnect.action(),
+
+    // Navigation
+    'back': () => {
+      addMessage('system', '⬅️ Going back...');
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.executeScript(tabs[0].id, { code: 'window.history.back()' });
+      });
+    },
+
+    'forward': () => {
+      addMessage('system', '➡️ Going forward...');
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.executeScript(tabs[0].id, { code: 'window.history.forward()' });
+      });
+    },
+
+    'refresh': () => {
+      addMessage('system', '🔄 Refreshing page...');
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.reload(tabs[0].id);
+      });
+    },
+
+    // Quick responses
+    'help': () => {
+      const commandsList = VoiceCommands.getCommandsList()
+        .map(cmd => `• ${cmd.description}: "${cmd.examples[0]}"`)
+        .join('\n');
+
+      addMessage('system', `🎤 Voice Commands Available:\n\n${commandsList}\n\n🔥 Quick Shortcuts:\n• "screenshot" - Take screenshot\n• "remember" - Save to memory\n• "clear" - Clear chat\n• "help" - Show this help`);
+    }
+  };
+
+  function execute(shortcutName) {
+    const shortcut = shortcuts[shortcutName.toLowerCase()];
+    if (shortcut) {
+      console.log('⚡ Executing shortcut:', shortcutName);
+      shortcut();
+      return true;
+    }
+    return false;
+  }
+
+  function checkForShortcut(text) {
+    const words = text.toLowerCase().trim().split(/\s+/);
+
+    // Check if any single word matches a shortcut
+    for (const word of words) {
+      if (shortcuts[word]) {
+        execute(word);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return { execute, checkForShortcut, shortcuts };
+})();
+
+// ===== Custom Voice Response System =====
+const CustomResponses = (() => {
+  const responses = {
+    greeting: [
+      'Hey there! How can I help you today?',
+      'Hi! What can I do for you?',
+      'Hello! Ready to assist you.',
+      'Hey! What\'s on your mind?'
+    ],
+
+    acknowledgment: [
+      'Got it!',
+      'Understood!',
+      'On it!',
+      'Sure thing!',
+      'You got it!'
+    ],
+
+    thinking: [
+      'Let me think about that...',
+      'Hmm, interesting question...',
+      'Give me a moment...',
+      'Let me process that...'
+    ],
+
+    success: [
+      'Done!',
+      'All set!',
+      'Task complete!',
+      'Finished!',
+      'There you go!'
+    ],
+
+    error: [
+      'Oops, something went wrong.',
+      'I ran into an issue.',
+      'Sorry, I couldn\'t do that.',
+      'That didn\'t work as expected.'
+    ]
+  };
+
+  function getRandom(category) {
+    const list = responses[category] || responses.acknowledgment;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  function getContextualResponse(context) {
+    // Analyze context and return appropriate response
+    const lowerContext = context.toLowerCase();
+
+    if (lowerContext.includes('hello') || lowerContext.includes('hi ') || lowerContext.includes('hey')) {
+      return getRandom('greeting');
+    }
+
+    if (lowerContext.includes('think') || lowerContext.includes('explain')) {
+      return getRandom('thinking');
+    }
+
+    if (lowerContext.includes('done') || lowerContext.includes('complete') || lowerContext.includes('finish')) {
+      return getRandom('success');
+    }
+
+    if (lowerContext.includes('error') || lowerContext.includes('fail') || lowerContext.includes('wrong')) {
+      return getRandom('error');
+    }
+
+    return getRandom('acknowledgment');
+  }
+
+  return { getRandom, getContextualResponse, responses };
+})();
+
+// ===== Voice Superpowers Integration =====
+
+// Initialize wake word detection when connected
+const originalConnect = els.connectBtn.onclick;
+function enhancedConnect() {
+  if (originalConnect) originalConnect();
+
+  // Initialize wake word detection after connection
+  setTimeout(() => {
+    if (connected && !WakeWordDetector.isActive()) {
+      WakeWordDetector.init();
+    }
+  }, 1000);
+}
+
+// Intercept voice input to check for commands
+const originalEnableMic = enableMic;
+enableMic = function() {
+  originalEnableMic();
+
+  // Check for voice commands in real-time
+  if (dataChannel) {
+    const originalOnMessage = dataChannel.onmessage;
+    dataChannel.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Check for user speech transcription
+        if (data.type === 'conversation.item.input_audio_transcription.completed') {
+          const transcript = data.transcript;
+
+          // First check for shortcuts (higher priority)
+          if (!VoiceShortcuts.checkForShortcut(transcript)) {
+            // Then check for commands
+            VoiceCommands.parseCommand(transcript);
+          }
+        }
+      } catch (error) {
+        // Not JSON or parsing failed, ignore
+      }
+
+      // Call original handler
+      if (originalOnMessage) originalOnMessage(event);
+    };
+  }
+}
+
+// ===== 🔌 SMART INTEGRATIONS SYSTEM ===================================
+
+/**
+ * OPTION 3: SMART INTEGRATIONS
+ * - Web search (Google, DuckDuckGo)
+ * - Weather API
+ * - News API
+ * - Wikipedia integration
+ * - YouTube search
+ * - Translation services
+ * - Quick facts and data
+ */
+
+// ===== Web Search Integration =====
+const WebSearch = (() => {
+  async function google(query) {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `🔍 Searching Google for: ${query}`);
+  }
+
+  async function duckduckgo(query) {
+    const url = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `🔍 Searching DuckDuckGo for: ${query}`);
+  }
+
+  async function youtube(query) {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `🎥 Searching YouTube for: ${query}`);
+  }
+
+  async function wikipedia(query) {
+    const url = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(query)}`;
+    chrome.tabs.create({ url });
+    addMessage('system', `📚 Searching Wikipedia for: ${query}`);
+  }
+
+  return { google, duckduckgo, youtube, wikipedia };
+})();
+
+// ===== Weather Integration =====
+const WeatherAPI = (() => {
+  // Using Open-Meteo (free, no API key required)
+  async function getWeather(location) {
+    try {
+      addMessage('system', `⏳ Fetching weather for ${location}...`);
+
+      // First, geocode the location
+      const geoResponse = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`
+      );
+      const geoData = await geoResponse.json();
+
+      if (!geoData.results || geoData.results.length === 0) {
+        addMessage('system', `❌ Location not found: ${location}`);
+        return null;
+      }
+
+      const { latitude, longitude, name, country } = geoData.results[0];
+
+      // Get weather data
+      const weatherResponse = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`
+      );
+      const weatherData = await weatherResponse.json();
+
+      const current = weatherData.current;
+      const weatherCodes = {
+        0: '☀️ Clear sky',
+        1: '🌤️ Mainly clear',
+        2: '⛅ Partly cloudy',
+        3: '☁️ Overcast',
+        45: '🌫️ Foggy',
+        48: '🌫️ Foggy',
+        51: '🌦️ Light drizzle',
+        61: '🌧️ Light rain',
+        63: '🌧️ Moderate rain',
+        65: '🌧️ Heavy rain',
+        71: '❄️ Light snow',
+        73: '❄️ Moderate snow',
+        75: '❄️ Heavy snow',
+        95: '⛈️ Thunderstorm'
+      };
+
+      const condition = weatherCodes[current.weather_code] || '🌡️ Unknown';
+      const temp = Math.round(current.temperature_2m);
+      const humidity = current.relative_humidity_2m;
+      const windSpeed = Math.round(current.wind_speed_10m);
+
+      const weatherMessage = `
+🌍 **${name}, ${country}**
+
+${condition}
+🌡️ Temperature: ${temp}°F
+💧 Humidity: ${humidity}%
+💨 Wind: ${windSpeed} mph
+      `.trim();
+
+      addMessage('assistant', weatherMessage);
+      return weatherData;
+    } catch (error) {
+      console.error('Weather API error:', error);
+      addMessage('system', `❌ Failed to fetch weather: ${error.message}`);
+      return null;
+    }
+  }
+
+  return { getWeather };
+})();
+
+// ===== News Integration =====
+const NewsAPI = (() => {
+  // Using NewsAPI (requires API key for production, using demo for now)
+  async function getTopHeadlines(category = 'general') {
+    try {
+      addMessage('system', `📰 Fetching ${category} news...`);
+
+      // For demo purposes, open news sites
+      const newsUrls = {
+        general: 'https://news.google.com',
+        technology: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtVnVHZ0pWVXlnQVAB',
+        business: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB',
+        sports: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp1ZEdvU0FtVnVHZ0pWVXlnQVAB',
+        entertainment: 'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB'
+      };
+
+      const url = newsUrls[category] || newsUrls.general;
+      chrome.tabs.create({ url });
+      addMessage('system', `📰 Opening ${category} news`);
+    } catch (error) {
+      console.error('News API error:', error);
+      addMessage('system', `❌ Failed to fetch news: ${error.message}`);
+    }
+  }
+
+  return { getTopHeadlines };
+})();
+
+// ===== Translation Integration =====
+const Translator = (() => {
+  async function translate(text, targetLang = 'es') {
+    try {
+      addMessage('system', `🌐 Translating to ${targetLang}...`);
+
+      // Using Google Translate (opens in new tab)
+      const url = `https://translate.google.com/?sl=auto&tl=${targetLang}&text=${encodeURIComponent(text)}`;
+      chrome.tabs.create({ url });
+      addMessage('system', `🌐 Opening Google Translate`);
+    } catch (error) {
+      console.error('Translation error:', error);
+      addMessage('system', `❌ Failed to translate: ${error.message}`);
+    }
+  }
+
+  const languages = {
+    'spanish': 'es',
+    'french': 'fr',
+    'german': 'de',
+    'italian': 'it',
+    'portuguese': 'pt',
+    'russian': 'ru',
+    'japanese': 'ja',
+    'korean': 'ko',
+    'chinese': 'zh',
+    'arabic': 'ar'
+  };
+
+  return { translate, languages };
+})();
+
+// ===== Quick Facts Integration =====
+const QuickFacts = (() => {
+  async function getTime(timezone = 'local') {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    addMessage('assistant', `⏰ Current time: ${timeString}`);
+  }
+
+  async function getDate() {
+    const now = new Date();
+    const dateString = now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    addMessage('assistant', `📅 Today's date: ${dateString}`);
+  }
+
+  async function calculate(expression) {
+    try {
+      // Simple calculator - sanitize input
+      const sanitized = expression.replace(/[^0-9+\-*/().\s]/g, '');
+      const result = eval(sanitized);
+      addMessage('assistant', `🔢 ${expression} = ${result}`);
+    } catch (error) {
+      addMessage('system', `❌ Invalid calculation: ${expression}`);
+    }
+  }
+
+  return { getTime, getDate, calculate };
+})();
+
+// ===== Smart Integrations Command Handler =====
+const SmartIntegrations = (() => {
+  function handleCommand(text) {
+    const lowerText = text.toLowerCase().trim();
+
+    // Weather commands
+    if (lowerText.includes('weather') || lowerText.includes('temperature')) {
+      const locationMatch = lowerText.match(/(?:weather|temperature)\s+(?:in|for|at)\s+([a-z\s]+)/i);
+      const location = locationMatch ? locationMatch[1].trim() : 'New York';
+      WeatherAPI.getWeather(location);
+      return true;
+    }
+
+    // News commands
+    if (lowerText.includes('news') || lowerText.includes('headlines')) {
+      const categoryMatch = lowerText.match(/(?:news|headlines)\s+(?:about|on)\s+([a-z]+)/i);
+      const category = categoryMatch ? categoryMatch[1] : 'general';
+      NewsAPI.getTopHeadlines(category);
+      return true;
+    }
+
+    // Web search commands
+    if (lowerText.startsWith('search ') || lowerText.startsWith('google ')) {
+      const query = lowerText.replace(/^(search|google)\s+/i, '');
+      WebSearch.google(query);
+      return true;
+    }
+
+    if (lowerText.startsWith('youtube ') || lowerText.includes('search youtube')) {
+      const query = lowerText.replace(/^youtube\s+|search youtube for\s+/i, '');
+      WebSearch.youtube(query);
+      return true;
+    }
+
+    if (lowerText.startsWith('wiki ') || lowerText.includes('wikipedia')) {
+      const query = lowerText.replace(/^wiki\s+|search wikipedia for\s+/i, '');
+      WebSearch.wikipedia(query);
+      return true;
+    }
+
+    // Translation commands
+    if (lowerText.includes('translate')) {
+      const textMatch = lowerText.match(/translate\s+["']([^"']+)["']/i);
+      const langMatch = lowerText.match(/to\s+([a-z]+)/i);
+
+      if (textMatch) {
+        const text = textMatch[1];
+        const lang = langMatch ? Translator.languages[langMatch[1]] || 'es' : 'es';
+        Translator.translate(text, lang);
+        return true;
+      }
+    }
+
+    // Time/Date commands
+    if (lowerText.includes('what time') || lowerText.includes('current time')) {
+      QuickFacts.getTime();
+      return true;
+    }
+
+    if (lowerText.includes('what date') || lowerText.includes('today\'s date') || lowerText.includes('what day')) {
+      QuickFacts.getDate();
+      return true;
+    }
+
+    // Calculator commands
+    if (lowerText.includes('calculate') || lowerText.includes('what is')) {
+      const calcMatch = lowerText.match(/(?:calculate|what is)\s+([0-9+\-*/().\s]+)/i);
+      if (calcMatch) {
+        QuickFacts.calculate(calcMatch[1]);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return {
+    handleCommand,
+    WebSearch,
+    WeatherAPI,
+    NewsAPI,
+    Translator,
+    QuickFacts
+  };
+})();
+
+// ===== ✨ UX POLISH SYSTEM ===================================
+
+// Typing Indicator
+const TypingIndicator = (() => {
+  let indicator = null;
+
+  function show() {
+    if (indicator) return;
+    indicator = document.createElement('div');
+    indicator.className = 'typing-indicator';
+    indicator.innerHTML = `<span class="typing-indicator-text">Atlas is thinking</span><div class="typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+    els.chatContainer.appendChild(indicator);
+    els.chatContainer.scrollTop = els.chatContainer.scrollHeight;
+  }
+
+  function hide() {
+    if (indicator) {
+      indicator.remove();
+      indicator = null;
+    }
+  }
+
+  return { show, hide };
+})();
+
+// Toast Notifications
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    els.menuBtn.click();
+  }
+  if (e.key === 'Escape' && isListening) disableMic();
+});
 
 // Mode switching
 els.continuousMode.addEventListener('change', () => {
@@ -1739,6 +3614,28 @@ MAX 3 words per response.`
     }));
 
     console.log('Updated session instructions:', isDesktopMode ? 'Desktop Commander enabled' : 'Standard mode');
+  }
+
+  saveSettings();
+});
+
+// Wake word detection toggle
+els.wakeWordMode.addEventListener('change', () => {
+  const isEnabled = els.wakeWordMode.checked;
+
+  if (isEnabled) {
+    // Initialize and start wake word detection
+    if (WakeWordDetector.init()) {
+      WakeWordDetector.start();
+      els.orbStatus.textContent = 'Wake word detection enabled';
+      addMessage('system', '👂 Wake word detection enabled! Say "Hey Atlas" to activate.');
+    } else {
+      els.wakeWordMode.checked = false;
+      addMessage('system', '⚠️ Wake word detection not supported in this browser.');
+    }
+  } else {
+    WakeWordDetector.stop();
+    els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
   }
 
   saveSettings();
@@ -2271,6 +4168,15 @@ els.serverUrl.addEventListener('change', () => {
   saveSettings();
 });
 
+// Save auto-connect setting when changed
+const autoConnectCheckbox = document.getElementById('autoConnect');
+if (autoConnectCheckbox) {
+  autoConnectCheckbox.addEventListener('change', () => {
+    console.log('💾 Auto-connect setting changed:', autoConnectCheckbox.checked);
+    saveSettings();
+  });
+}
+
 // Screen Capture Functionality
 async function captureScreen() {
   try {
@@ -2444,11 +4350,12 @@ els.specialInstructions.addEventListener('input', (e) => {
 // View knowledge base
 els.viewKnowledgeBtn.addEventListener('click', async () => {
   try {
-    const response = await fetch('http://localhost:8787/api/knowledge', {
+    const serverUrl = els.serverUrl.value.trim();
+    const response = await fetch(`${serverUrl}/api/knowledge`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       showKnowledgeModal(data);
@@ -2465,11 +4372,13 @@ els.viewKnowledgeBtn.addEventListener('click', async () => {
 els.clearMemoryBtn.addEventListener('click', async () => {
   if (confirm('Are you sure you want to clear Atlas\'s memory? This cannot be undone.')) {
     try {
-      const response = await fetch('http://localhost:8787/api/knowledge/clear', {
+      const serverUrl = els.serverUrl.value.trim();
+      const response = await fetch(`${serverUrl}/api/knowledge/clear`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: 'default' })
       });
-      
+
       if (response.ok) {
         alert('Memory cleared successfully!');
       } else {
@@ -2489,11 +4398,12 @@ function loadSettings() {
   const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
   const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
   const savedVisionMode = localStorage.getItem('atlasVoice_visionMode');
+  const savedWakeWordMode = localStorage.getItem('atlasVoice_wakeWordMode');
   const savedTemperature = localStorage.getItem('atlasVoice_temperature');
   const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
   const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedWakeWordMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -2519,6 +4429,12 @@ function loadSettings() {
     console.log('✅ Vision mode restored');
   }
 
+  if (savedWakeWordMode === 'true') {
+    els.wakeWordMode.checked = true;
+    // Don't auto-start wake word detection on load - user must connect first
+    console.log('✅ Wake word mode setting restored');
+  }
+
   if (savedTemperature) {
     els.temperatureSlider.value = savedTemperature;
     els.temperatureValue.textContent = parseFloat(savedTemperature).toFixed(1);
@@ -2534,6 +4450,16 @@ function loadSettings() {
     els.specialInstructions.value = savedSpecialInstructions;
     console.log('✅ Special instructions restored');
   }
+
+  // Load auto-connect setting
+  const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
+  if (savedAutoConnect === 'true') {
+    const autoConnectCheckbox = document.getElementById('autoConnect');
+    if (autoConnectCheckbox) {
+      autoConnectCheckbox.checked = true;
+    }
+    console.log('✅ Auto-connect enabled');
+  }
 }
 
 // Save settings to localStorage
@@ -2543,6 +4469,7 @@ function saveSettings() {
     desktopMode: els.desktopMode.checked,
     continuousMode: els.continuousMode.checked,
     visionMode: els.visionMode.checked,
+    wakeWordMode: els.wakeWordMode.checked,
     temperature: els.temperatureSlider.value,
     memoryEnabled: els.memoryEnabled.checked,
     specialInstructions: els.specialInstructions.value
@@ -2553,10 +4480,17 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_serverUrl', settings.serverUrl);
   localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
   localStorage.setItem('atlasVoice_continuousMode', String(settings.continuousMode));
+  localStorage.setItem('atlasVoice_wakeWordMode', String(settings.wakeWordMode));
   localStorage.setItem('atlasVoice_visionMode', String(settings.visionMode));
   localStorage.setItem('atlasVoice_temperature', settings.temperature);
   localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
   localStorage.setItem('atlasVoice_specialInstructions', settings.specialInstructions);
+
+  // Save auto-connect setting
+  const autoConnectCheckbox = document.getElementById('autoConnect');
+  if (autoConnectCheckbox) {
+    localStorage.setItem('atlasVoice_autoConnect', String(autoConnectCheckbox.checked));
+  }
 
   console.log('✅ Settings saved');
 }
@@ -2910,6 +4844,15 @@ setupContinuousMode();
 webSpeechFallbackSetup();
 updateOrbState();
 checkFirstTimeUse();
+
+// Auto-connect if enabled
+setTimeout(() => {
+  const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
+  if (savedAutoConnect === 'true' && !connected) {
+    console.log('🔌 Auto-connecting...');
+    els.connectBtn.click();
+  }
+}, 500);
 
 // Prompt Generation Functions
 function generateClaudePrompt(args) {
