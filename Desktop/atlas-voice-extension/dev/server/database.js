@@ -214,15 +214,9 @@ export async function saveConversation(userId, sessionId, role, content, metadat
   if (!sql) return { success: false, message: 'Database not configured' };
 
   try {
-    // Map 'role' to 'message_type' for database schema compatibility
-    // role: 'user' -> message_type: 'user_message'
-    // role: 'assistant' -> message_type: 'assistant_response'
-    const messageType = role === 'user' ? 'user_message' :
-                       role === 'assistant' ? 'assistant_response' : role;
-
     const result = await sql`
-      INSERT INTO atlas_conversations (user_id, session_id, message_type, content, metadata)
-      VALUES (${userId}, ${sessionId}, ${messageType}, ${content}, ${JSON.stringify(metadata)})
+      INSERT INTO atlas_conversations (user_id, session_id, role, content, metadata)
+      VALUES (${userId}, ${sessionId}, ${role}, ${content}, ${JSON.stringify(metadata)})
       RETURNING *
     `;
     return { success: true, data: result[0] };
