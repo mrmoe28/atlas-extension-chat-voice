@@ -169,12 +169,16 @@ const els = {
   textInput: document.getElementById('textInput'),
   textSendBtn: document.getElementById('textSendBtn'),
   fileUploadBtn: document.getElementById('fileUploadBtn'),
-  fileInput: document.getElementById('fileInput')
+  fileInput: document.getElementById('fileInput'),
+  muteBtn: document.getElementById('muteBtn'),
+  muteIcon: document.getElementById('muteIcon'),
+  unmutedIcon: document.getElementById('unmutedIcon')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
 let isListening = false;
 let isSpeaking = false;
+let isMuted = false;
 let isContinuousMode = false;
 let isDesktopMode = false;
 let isVisionMode = false;
@@ -360,6 +364,7 @@ function createRemoteAudio() {
   remoteAudioEl = document.createElement('audio');
   remoteAudioEl.autoplay = true;
   remoteAudioEl.playsInline = true;
+  remoteAudioEl.muted = isMuted; // Apply mute state
   document.body.appendChild(remoteAudioEl);
 
   remoteAudioEl.onplay = () => {
@@ -2352,6 +2357,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
     els.voiceBtn.disabled = false;
+    els.muteBtn.disabled = false;
     els.textInput.disabled = false;
     els.textSendBtn.disabled = false;
     els.fileUploadBtn.disabled = false;
@@ -2389,9 +2395,16 @@ function teardown() {
   els.statusDot.classList.remove('connected');
   els.interruptBtn.disabled = true;
   els.voiceBtn.disabled = true;
+  els.muteBtn.disabled = true;
   els.voiceBtn.classList.remove('active');
   els.connectBtn.textContent = 'Connect';
   els.connectBtn.classList.remove('connected');
+
+  // Reset mute state
+  isMuted = false;
+  els.muteBtn.classList.remove('muted');
+  els.muteIcon.style.display = 'block';
+  els.unmutedIcon.style.display = 'none';
   
   // Reset UI to show voice orb
   els.voiceOrbWrapper.classList.remove('hidden');
@@ -4182,6 +4195,33 @@ els.interruptBtn.addEventListener('click', () => {
   } catch (err) {
     console.error('Interrupt failed:', err);
   }
+});
+
+// Mute button
+els.muteBtn.addEventListener('click', () => {
+  isMuted = !isMuted;
+
+  // Update audio element
+  if (remoteAudioEl) {
+    remoteAudioEl.muted = isMuted;
+  }
+
+  // Update button appearance
+  if (isMuted) {
+    els.muteBtn.classList.add('muted');
+    els.muteIcon.style.display = 'none';
+    els.unmutedIcon.style.display = 'block';
+    els.voiceStatus.textContent = 'Atlas is muted';
+  } else {
+    els.muteBtn.classList.remove('muted');
+    els.muteIcon.style.display = 'block';
+    els.unmutedIcon.style.display = 'none';
+    if (connected) {
+      els.voiceStatus.textContent = 'Hold to talk';
+    }
+  }
+
+  console.log(isMuted ? '🔇 Atlas muted' : '🔊 Atlas unmuted');
 });
 
 // Web Speech Fallback
