@@ -2192,8 +2192,16 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
         if (msg.type === 'response.text.done' || msg.type === 'response.done') {
           if (currentAIMessage) {
             removeTypingIndicator();
-            addMessage('assistant', currentAIMessage);
-            // Save to database and check for memory keywords
+
+            // Clean command syntax from display (but keep in DB)
+            const displayMessage = currentAIMessage.replace(/\[CMD:[^\]]+\]/g, '').replace(/\[WEB:[^\]]+\]/g, '').trim();
+
+            // Only show message if there's content after removing commands
+            if (displayMessage) {
+              addMessage('assistant', displayMessage);
+            }
+
+            // Save full message to database (with commands) for context
             saveConversationToDB('assistant', currentAIMessage);
             extractAndSaveMemory(currentUserMessage, currentAIMessage);
             currentAIMessage = '';
@@ -2208,8 +2216,16 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
         if (msg.type === 'response.audio_transcript.done') {
           if (currentAIMessage) {
             removeTypingIndicator();
-            addMessage('assistant', currentAIMessage);
-            // Save to database and check for memory keywords
+
+            // Clean command syntax from display (but keep in DB)
+            const displayMessage = currentAIMessage.replace(/\[CMD:[^\]]+\]/g, '').replace(/\[WEB:[^\]]+\]/g, '').trim();
+
+            // Only show message if there's content after removing commands
+            if (displayMessage) {
+              addMessage('assistant', displayMessage);
+            }
+
+            // Save full message to database (with commands) for context
             saveConversationToDB('assistant', currentAIMessage);
             extractAndSaveMemory(currentUserMessage, currentAIMessage);
             currentAIMessage = '';
