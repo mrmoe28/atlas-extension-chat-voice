@@ -182,6 +182,8 @@ let isMuted = false;
 let isContinuousMode = false;
 let isDesktopMode = false;
 let isVisionMode = false;
+let isContinuousVision = false; // Continuous screen vision active
+let visionCaptureInterval = null; // Interval ID for continuous capture
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
@@ -189,17 +191,13 @@ let memoryContext = ''; // Loaded memories for AI context
 
 // Initialize persistent user ID and session management
 function initializeUserSession() {
-  // Get or create persistent user ID
-  let userId = localStorage.getItem('atlasVoice_userId');
-  if (!userId) {
-    // Generate unique user ID using crypto for better randomness
-    const randomBytes = crypto.getRandomValues(new Uint8Array(16));
-    userId = 'user_' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    localStorage.setItem('atlasVoice_userId', userId);
-    console.log('🆔 Created new user ID:', userId);
-  } else {
-    console.log('🆔 Using existing user ID:', userId);
-  }
+  // Use fixed user ID to match database user
+  // This ensures foreign key constraints work properly
+  const userId = 'default_user';
+
+  // Store in localStorage for consistency
+  localStorage.setItem('atlasVoice_userId', userId);
+  console.log('🆔 Using user ID:', userId);
 
   // Create new session ID (tied to user but unique per launch)
   const sessionId = userId + '_session_' + Date.now().toString();
@@ -1602,6 +1600,31 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
             required: ['filename', 'location']
           }
         },
+        // Continuous Vision Tools
+        {
+          type: 'function',
+          name: 'enable_continuous_vision',
+          description: 'Enables continuous screen vision - Atlas will see your screen in real-time every 1-2 seconds. Use when user says phrases like "look at this", "show me", "what do you see", "watch my screen", or asks you to monitor something visually.',
+          parameters: {
+            type: 'object',
+            properties: {
+              interval_seconds: {
+                type: 'number',
+                description: 'Capture interval in seconds (1-5, default: 2)',
+                default: 2
+              }
+            }
+          }
+        },
+        {
+          type: 'function',
+          name: 'disable_continuous_vision',
+          description: 'Disables continuous screen vision. Use when user says "stop looking", "close your eyes", "stop watching", or when the visual task is complete.',
+          parameters: {
+            type: 'object',
+            properties: {}
+          }
+        },
         // Web Automation Tools
         {
           type: 'function',
@@ -2076,6 +2099,15 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
                 result = { success: true, message: `Created ${args.filename}` };
                 addMessage('assistant', `✅ Created ${args.filename}`);
               }
+            } else if (functionName === 'enable_continuous_vision') {
+              const intervalSeconds = args.interval_seconds || 2;
+              startContinuousVision(intervalSeconds);
+              result = { success: true, message: `Continuous vision enabled - capturing screen every ${intervalSeconds} seconds` };
+              addMessage('assistant', `👁️ Vision enabled - I can now see your screen`);
+            } else if (functionName === 'disable_continuous_vision') {
+              stopContinuousVision();
+              result = { success: true, message: 'Continuous vision disabled' };
+              addMessage('assistant', '👁️ Vision disabled - no longer monitoring screen');
             } else if (functionName === 'web_click_element') {
               // Web automation: Click element
               const webResult = await executeBrowserCommand('clickElement', { 
@@ -2873,18 +2905,72 @@ const WakeWordDetector = (() => {
     }
   }
 
+  let autoMuteTimer = null;
+
   function onWakeWordDetected(transcript) {
     // Visual feedback
     addMessage('system', '👋 Hey! I heard you say "' + transcript + '"');
 
-    // Auto-activate voice if connected
-    if (connected && !isListening) {
-      enableMic();
+    // Auto-activate voice if connected and currently muted
+    if (connected && isMuted) {
+      // Unmute by triggering mute button
+      console.log('🎙️ Wake word detected - unmuting microphone');
 
-      // Auto-disable after 10 seconds if no speech
-      setTimeout(() => {
-        if (isListening && connected) {
-          disableMic();
+      // Unmute the microphone
+      isMuted = false;
+
+      // Update audio element
+      if (remoteAudioEl) {
+        remoteAudioEl.muted = false;
+      }
+
+      // Enable microphone tracks
+      if (micStream) {
+        const audioTracks = micStream.getAudioTracks();
+        audioTracks.forEach(track => {
+          track.enabled = true;
+        });
+      }
+
+      // Update button appearance
+      els.muteBtn.classList.remove('muted');
+      els.muteIcon.style.display = 'block';
+      els.unmutedIcon.style.display = 'none';
+      els.voiceStatus.textContent = 'Listening...';
+
+      // Clear any existing auto-mute timer
+      if (autoMuteTimer) {
+        clearTimeout(autoMuteTimer);
+      }
+
+      // Set auto-mute timer for 10 seconds of inactivity
+      autoMuteTimer = setTimeout(() => {
+        if (!isMuted && connected) {
+          console.log('⏱️ 10 seconds of inactivity - auto-muting');
+
+          // Mute the microphone
+          isMuted = true;
+
+          // Update audio element
+          if (remoteAudioEl) {
+            remoteAudioEl.muted = true;
+          }
+
+          // Disable microphone tracks
+          if (micStream) {
+            const audioTracks = micStream.getAudioTracks();
+            audioTracks.forEach(track => {
+              track.enabled = false;
+            });
+          }
+
+          // Update button appearance
+          els.muteBtn.classList.add('muted');
+          els.muteIcon.style.display = 'none';
+          els.unmutedIcon.style.display = 'block';
+          els.voiceStatus.textContent = 'Say "Hey Atlas" to activate';
+
+          addMessage('system', '🔇 Auto-muted after 10 seconds of inactivity. Say "Hey Atlas" to reactivate.');
         }
       }, 10000);
     }
@@ -3731,6 +3817,16 @@ els.wakeWordMode.addEventListener('change', () => {
       WakeWordDetector.start();
       els.orbStatus.textContent = 'Wake word detection enabled';
       addMessage('system', '👂 Wake word detection enabled! Say "Hey Atlas" to activate.');
+
+      // Notify background script
+      chrome.runtime.sendMessage({ type: 'wakeword-enabled' });
+
+      // Auto-mute on connection if wake word is enabled
+      if (connected && !isMuted) {
+        console.log('🔇 Auto-muting on wake word enable - say "Hey Atlas" to activate');
+        els.muteBtn.click(); // Trigger mute
+        addMessage('system', '🔇 Microphone muted. Say "Hey Atlas" to activate voice interaction.');
+      }
     } else {
       els.wakeWordMode.checked = false;
       addMessage('system', '⚠️ Wake word detection not supported in this browser.');
@@ -3738,6 +3834,9 @@ els.wakeWordMode.addEventListener('change', () => {
   } else {
     WakeWordDetector.stop();
     els.orbStatus.textContent = connected ? 'Ready - Hold button to talk' : 'Click Connect in menu to start';
+
+    // Notify background script
+    chrome.runtime.sendMessage({ type: 'wakeword-disabled' });
   }
 
   saveSettings();
@@ -4384,6 +4483,120 @@ async function captureScreen() {
 }
 
 els.captureScreenBtn.addEventListener('click', captureScreen);
+
+// Continuous Vision Functions
+async function captureSingleFrameForVision() {
+  try {
+    // Request screen capture
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        mediaSource: 'screen',
+        width: { ideal: 1280 }, // Lower resolution for continuous capture
+        height: { ideal: 720 }
+      }
+    });
+
+    // Create video element to capture frame
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.play();
+
+    // Wait for video to be ready
+    await new Promise(resolve => {
+      video.onloadedmetadata = resolve;
+    });
+
+    // Create canvas and capture frame
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    // Convert to base64
+    const screenshot = canvas.toDataURL('image/jpeg', 0.7); // Slightly lower quality for performance
+
+    // Stop the stream immediately
+    stream.getTracks().forEach(track => track.stop());
+
+    // Send image through Realtime API data channel
+    if (dataChannel && dataChannel.readyState === 'open') {
+      // Extract base64 data (remove data URL prefix)
+      const base64Data = screenshot.split(',')[1];
+
+      dataChannel.send(JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'input_image',
+              image_url: `data:image/jpeg;base64,${base64Data}`
+            }
+          ]
+        }
+      }));
+
+      console.log('📸 Vision frame sent to Realtime API');
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Continuous vision capture error:', err);
+    // If user cancelled screen share, stop continuous vision
+    if (err.name === 'NotAllowedError') {
+      stopContinuousVision();
+      addMessage('assistant', '👁️ Vision disabled - screen sharing cancelled');
+    }
+    return false;
+  }
+}
+
+function startContinuousVision(intervalSeconds = 2) {
+  // Stop any existing interval
+  if (visionCaptureInterval) {
+    clearInterval(visionCaptureInterval);
+  }
+
+  isContinuousVision = true;
+
+  // Update UI to show vision is active
+  els.voiceOrb.classList.add('vision-active');
+  els.orbStatus.textContent = '👁️ Vision Active - Monitoring screen';
+
+  console.log(`👁️ Starting continuous vision with ${intervalSeconds}s interval`);
+
+  // Capture first frame immediately
+  captureSingleFrameForVision();
+
+  // Set up interval for continuous capture
+  visionCaptureInterval = setInterval(async () => {
+    if (isContinuousVision && dataChannel && dataChannel.readyState === 'open') {
+      await captureSingleFrameForVision();
+    } else {
+      // Stop if connection lost
+      stopContinuousVision();
+    }
+  }, intervalSeconds * 1000);
+}
+
+function stopContinuousVision() {
+  if (visionCaptureInterval) {
+    clearInterval(visionCaptureInterval);
+    visionCaptureInterval = null;
+  }
+
+  isContinuousVision = false;
+
+  // Update UI
+  els.voiceOrb.classList.remove('vision-active');
+  if (connected) {
+    els.orbStatus.textContent = 'Ready - Hold button to talk';
+  }
+
+  console.log('👁️ Continuous vision stopped');
+}
 
 // Permission Modal Logic
 async function checkFirstTimeUse() {

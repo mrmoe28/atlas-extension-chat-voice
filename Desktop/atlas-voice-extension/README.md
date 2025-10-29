@@ -11,7 +11,7 @@
 
 *A Chrome Manifest V3 extension for voice AI assistance with desktop automation, screen vision, and persistent memory - powered by OpenAI's Realtime API*
 
-[🚀 Installation](#-installation) • [⚡ Quick Start](#-quick-start) • [📖 Documentation](./docs/FEATURES.md) • [🎤 Voice Commands](#-voice-commands-examples) • [🐛 Issues](https://github.com/yourusername/atlas-voice-extension/issues)
+[🚀 Installation](#-installation) • [⚡ Quick Start](#-quick-start) • [📖 Documentation](./docs/FEATURES.md) • [🎙️ Background Mode](./BACKGROUND_MODE.md) • [🎤 Voice Commands](#-voice-commands-examples) • [🐛 Issues](https://github.com/yourusername/atlas-voice-extension/issues)
 
 </div>
 
@@ -53,7 +53,8 @@
 
 - 🎯 **Push-to-Talk** - Hold button to speak (perfect for precision)
 - 🗣️ **Continuous** - Voice Activity Detection for hands-free conversation
-- 🎙️ **Wake Word** - *(Coming soon)* Activate with custom wake word
+- 🎙️ **Wake Word** - Say "Hey Atlas" to activate (with auto-mute after 10 seconds)
+- 🔄 **Background Mode** - Run Atlas in background, activate with wake word anytime
 
 ### Desktop Automation
 
