@@ -273,3 +273,4 @@ DEEPGRAM_API_KEY=
 - Provide text input as alternative to voice
 - Show browser compatibility warnings
 - Use feature detection before enabling voice features
+- Add to memory. Always check before creating a new database or vercel project it may already be made.

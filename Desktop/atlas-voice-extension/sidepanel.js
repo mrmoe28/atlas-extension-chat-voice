@@ -3724,6 +3724,16 @@ function loadSettings() {
     els.specialInstructions.value = savedSpecialInstructions;
     console.log('✅ Special instructions restored');
   }
+
+  // Load auto-connect setting
+  const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
+  if (savedAutoConnect === 'true') {
+    const autoConnectCheckbox = document.getElementById('autoConnect');
+    if (autoConnectCheckbox) {
+      autoConnectCheckbox.checked = true;
+    }
+    console.log('✅ Auto-connect enabled');
+  }
 }
 
 // Save settings to localStorage
@@ -3749,6 +3759,12 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_temperature', settings.temperature);
   localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
   localStorage.setItem('atlasVoice_specialInstructions', settings.specialInstructions);
+
+  // Save auto-connect setting
+  const autoConnectCheckbox = document.getElementById('autoConnect');
+  if (autoConnectCheckbox) {
+    localStorage.setItem('atlasVoice_autoConnect', String(autoConnectCheckbox.checked));
+  }
 
   console.log('✅ Settings saved');
 }
@@ -4102,6 +4118,15 @@ setupContinuousMode();
 webSpeechFallbackSetup();
 updateOrbState();
 checkFirstTimeUse();
+
+// Auto-connect if enabled
+setTimeout(() => {
+  const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
+  if (savedAutoConnect === 'true' && !connected) {
+    console.log('🔌 Auto-connecting...');
+    els.connectBtn.click();
+  }
+}, 500);
 
 // Prompt Generation Functions
 function generateClaudePrompt(args) {
