@@ -555,8 +555,9 @@ async function fetchLatestRelease() {
 
   const release = await response.json();
 
+  // Look for any ZIP file in the release assets
   const zipAsset = release.assets.find(asset =>
-    asset.name === 'atlas-voice-extension.zip'
+    asset.name.endsWith('.zip') && asset.content_type === 'application/zip'
   );
 
   if (!zipAsset) {
