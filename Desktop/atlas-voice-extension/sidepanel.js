@@ -2498,8 +2498,6 @@ async function handleFileUpload(event) {
 
         // For images
         if (file.type.startsWith('image/')) {
-          const base64 = content.split(',')[1];
-
           // Display image in chat with visual preview
           addMessage('user', `📷 ${file.name}`, 'text', {
             type: 'image',
@@ -2511,16 +2509,44 @@ async function handleFileUpload(event) {
           try {
             showTypingIndicator();
 
+            // Convert image to compatible format (PNG/JPEG) if needed
+            let imageData = content;
+            const supportedFormats = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+
+            if (!supportedFormats.includes(file.type.toLowerCase())) {
+              // Convert unsupported formats to PNG
+              const img = new Image();
+              img.src = content;
+              await new Promise((resolve) => { img.onload = resolve; });
+
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              imageData = canvas.toDataURL('image/png');
+              console.log(`Converted ${file.type} to PNG for analysis`);
+            }
+
             const serverUrl = els.serverUrl.value.trim();
+            if (!serverUrl) {
+              throw new Error('No server URL configured. Please set server URL in settings.');
+            }
+
             // Use existing vision endpoint with proper data URL format
             const response = await fetch(`${serverUrl}/api/vision`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                image: content, // Send full data URL (data:image/...;base64,...)
+                image: imageData, // Send full data URL (data:image/...;base64,...)
                 prompt: `You are Atlas, Mo's friendly AI assistant. Analyze this image (${file.name}) in detail. Be specific about what you see, including colors, objects, text, layout, and any notable features. Respond conversationally as Atlas would.`
               })
             });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Server error (${response.status}): ${errorText}`);
+            }
 
             const result = await response.json();
             removeTypingIndicator();
@@ -2533,12 +2559,13 @@ async function handleFileUpload(event) {
               // Extract and save memory if relevant
               extractAndSaveMemory(`[Uploaded image: ${file.name}]`, result.description);
             } else {
-              addMessage('assistant', `I can see the image "${file.name}", but I had trouble analyzing it. ${result.error || 'Please try again.'}`);
+              const errorMsg = result.error || 'Unknown error';
+              addMessage('assistant', `I can see the image "${file.name}", but I had trouble analyzing it: ${errorMsg}`);
             }
           } catch (error) {
             console.error('Image analysis error:', error);
             removeTypingIndicator();
-            addMessage('assistant', `I received the image "${file.name}", but I'm having trouble analyzing it right now. Make sure the server is running at ${els.serverUrl.value.trim()}`);
+            addMessage('assistant', `I received the image "${file.name}", but I'm having trouble analyzing it right now. Error: ${error.message}`);
           }
         }
         // For documents (text-based files)
@@ -2574,10 +2601,57 @@ async function handleFileUpload(event) {
             dataChannel.send(JSON.stringify({ type: 'response.create' }));
           }
         }
-        // For PDFs (just notify, browser can't read directly)
+        // For PDFs - extract text using PDF.js
         else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-          addMessage('user', `📄 ${file.name} (PDF - content extraction not yet supported)`);
-          addMessage('system', 'PDF content extraction requires additional setup. Atlas can see the filename but not the content yet.');
+          try {
+            showTypingIndicator();
+            addMessage('user', `📄 ${file.name} (extracting text...)`);
+
+            // Load PDF using PDF.js
+            const loadingTask = pdfjsLib.getDocument({ data: content });
+            const pdf = await loadingTask.promise;
+
+            // Extract text from all pages
+            let fullText = '';
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              const page = await pdf.getPage(pageNum);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map(item => item.str).join(' ');
+              fullText += `\n\n--- Page ${pageNum} ---\n${pageText}`;
+            }
+
+            removeTypingIndicator();
+
+            // Display document in chat with preview
+            const preview = fullText.length > 500 ? fullText.substring(0, 500) + '...' : fullText;
+            addMessage('user', `📄 ${file.name}`, 'text', {
+              type: 'document',
+              name: file.name,
+              preview: preview
+            });
+
+            // Send document content to AI through voice channel (like .md files)
+            if (dataChannel && dataChannel.readyState === 'open') {
+              const event = {
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'user',
+                  content: [
+                    { type: 'input_text', text: `Please analyze this PDF document (${file.name}):\n\n${fullText}` }
+                  ]
+                }
+              };
+              dataChannel.send(JSON.stringify(event));
+              dataChannel.send(JSON.stringify({ type: 'response.create' }));
+            } else {
+              addMessage('system', 'PDF text extracted, but not connected to voice. Connect first to analyze the document.');
+            }
+          } catch (error) {
+            console.error('PDF extraction error:', error);
+            removeTypingIndicator();
+            addMessage('assistant', `I received the PDF "${file.name}", but had trouble extracting the text. ${error.message}`);
+          }
         }
         // For other file types
         else {
