@@ -36,3 +36,8 @@ extension.zip
 *.crx
 *.pem
 .vercel
+
+# Training data (symlinks to external drive)
+atlas-finetune
+atlas-finetune-data
+atlas-finetune-datasets.zip
