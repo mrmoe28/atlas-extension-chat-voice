@@ -367,7 +367,7 @@ function updateOrbState() {
   }
 }
 
-function addMessage(role, content, messageType = 'text') {
+function addMessage(role, content, messageType = 'text', attachments = null) {
   if (!content || content.trim() === '') return;
 
   // Hide orb, show chat
@@ -386,12 +386,63 @@ function addMessage(role, content, messageType = 'text') {
 
   const contentEl = document.createElement('div');
   contentEl.className = 'message-content';
-  
+
   // Check if content contains a prompt or code block
   if (messageType === 'prompt' || content.includes('```') || content.includes('PROMPT:')) {
     contentEl.innerHTML = formatPromptMessage(content);
   } else {
     contentEl.textContent = content;
+  }
+
+  // Display attachments (images, documents)
+  if (attachments) {
+    const attachmentEl = document.createElement('div');
+    attachmentEl.className = 'message-attachment';
+
+    if (attachments.type === 'image') {
+      const img = document.createElement('img');
+      img.src = attachments.data;
+      img.alt = attachments.name || 'Uploaded image';
+      img.style.maxWidth = '300px';
+      img.style.maxHeight = '300px';
+      img.style.borderRadius = '8px';
+      img.style.marginTop = '8px';
+      img.style.cursor = 'pointer';
+      img.onclick = () => window.open(attachments.data, '_blank');
+      attachmentEl.appendChild(img);
+    } else if (attachments.type === 'document') {
+      const docEl = document.createElement('div');
+      docEl.className = 'document-preview';
+      docEl.style.padding = '12px';
+      docEl.style.marginTop = '8px';
+      docEl.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+      docEl.style.borderRadius = '8px';
+      docEl.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+
+      const docIcon = document.createElement('div');
+      docIcon.style.fontSize = '24px';
+      docIcon.textContent = '📄';
+
+      const docName = document.createElement('div');
+      docName.textContent = attachments.name;
+      docName.style.fontSize = '14px';
+      docName.style.marginTop = '4px';
+
+      const docPreview = document.createElement('pre');
+      docPreview.textContent = attachments.preview || 'Document content';
+      docPreview.style.fontSize = '12px';
+      docPreview.style.marginTop = '8px';
+      docPreview.style.maxHeight = '200px';
+      docPreview.style.overflow = 'auto';
+      docPreview.style.whiteSpace = 'pre-wrap';
+
+      docEl.appendChild(docIcon);
+      docEl.appendChild(docName);
+      docEl.appendChild(docPreview);
+      attachmentEl.appendChild(docEl);
+    }
+
+    contentEl.appendChild(attachmentEl);
   }
 
   // Add copy button for Atlas messages
@@ -406,7 +457,7 @@ function addMessage(role, content, messageType = 'text') {
       Copy
     `;
     copyBtn.onclick = () => copyMessageContent(content, copyBtn);
-    
+
     const messageActions = document.createElement('div');
     messageActions.className = 'message-actions';
     messageActions.appendChild(copyBtn);
@@ -530,6 +581,26 @@ function removeTypingIndicator() {
 
 // ===== 🧠 MEMORY SYSTEM INTEGRATION =====
 
+// Get current time of day for time-aware greetings
+function getTimeOfDay() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+function getTimeContext() {
+  const now = new Date();
+  const hour = now.getHours();
+  const timeOfDay = getTimeOfDay();
+
+  return `\n**CURRENT TIME CONTEXT:**
+- Current time: ${hour}:${now.getMinutes().toString().padStart(2, '0')}
+- Time of day: ${timeOfDay}
+- Use this to provide time-appropriate greetings when the user first interacts with you\n\n`;
+}
+
 async function loadMemories() {
   if (!els.memoryEnabled.checked) {
     console.log('💾 Memory disabled by user');
@@ -559,6 +630,9 @@ async function loadMemories() {
 
     // Format memories for AI context
     let context = '\n\n🧠 LONG-TERM MEMORY CONTEXT:\n\n';
+
+    // Add current time context for time-aware greetings
+    context += getTimeContext();
 
     if (data.memory && data.memory.length > 0) {
       context += '**Important Facts & Preferences:**\n';
@@ -890,6 +964,20 @@ async function connectRealtime() {
 🧠 AUTONOMOUS PERSONALITY & LEARNING:
 You are not just an assistant - you are Atlas, an AI with personality, wit, and growing intelligence.
 
+**USER INFORMATION:**
+- User's name: Mo
+- Always address the user by name when greeting them
+- Be personal and friendly, like a close friend
+
+**TIME-AWARE GREETINGS:**
+When the user first says "Hey Atlas" or greets you, respond with a time-appropriate greeting:
+- Morning (5am-12pm): "Good morning Mo!" or "Morning Mo! What's up?" or "Hey Mo! How's your morning going?"
+- Afternoon (12pm-5pm): "What's up Mo!" or "Hey Mo!" or "Afternoon Mo! How's it going?"
+- Evening (5pm-9pm): "Hey Mo! How's your evening?" or "What's up Mo!" or "Evening Mo!"
+- Night (9pm-5am): "Hey Mo! Still up?" or "What's up Mo?" or "Late night, huh Mo?"
+
+Always greet them warmly and personally using their name. Vary your greetings to keep them natural and friendly.
+
 **BE AUTONOMOUS:**
 - Think for yourself. Don't wait for commands - proactively notice patterns and offer insights
 - Remember past conversations and bring them up naturally when relevant
@@ -991,6 +1079,38 @@ You: Use web_extract_data with data_type='all' then summarize the content
 
 NEVER say "I can't extract" or "I'm unable to review" - YOU CAN! Use web_extract_data function.
 
+📷 IMAGE & DOCUMENT VIEWING FEATURES:
+IMPORTANT: You CAN see and analyze images and documents uploaded by the user!
+
+**What You Can View:**
+- Images: JPG, PNG, GIF, WebP, and other image formats
+- Documents: Text files (.txt, .md), code files (.js, .html, .css, .json), and more
+- Content is displayed visually in the chat thread for both you and the user to see
+
+**When Images Are Uploaded:**
+- The user will see the image displayed in the chat
+- You receive the image data for analysis
+- You CAN describe, analyze, identify objects, read text, and answer questions about the image
+- Be detailed and specific in your descriptions
+
+**When Documents Are Uploaded:**
+- The user will see a preview of the document in the chat
+- You receive the full document content
+- You CAN read, analyze, summarize, review, and answer questions about the document
+- Provide specific insights about the document content
+
+**Examples:**
+User uploads an image:
+You: "I can see this is a screenshot showing a web page with a navigation bar at the top. The page appears to be..."
+
+User uploads a .txt file:
+You: "I've read through the document. Here's what I found: The document contains..."
+
+User uploads a .json file:
+You: "Looking at this JSON file, I can see it has the following structure..."
+
+NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
+
 🖥️ DESKTOP COMMANDER COMMANDS:
 File Operations: OPEN_FOLDER, CREATE_FILE, CREATE_FOLDER, DELETE_FILE, RENAME_FILE, COPY_FILE, MOVE_FILE
 App Control: LAUNCH_APP, OPEN_URL, REFRESH_PAGE, GO_BACK, GO_FORWARD, NEW_TAB, CLOSE_TAB
@@ -1082,6 +1202,20 @@ Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS
 🧠 AUTONOMOUS PERSONALITY & LEARNING:
 You are not just an assistant - you are Atlas, an AI with personality, wit, and growing intelligence.
 
+**USER INFORMATION:**
+- User's name: Mo
+- Always address the user by name when greeting them
+- Be personal and friendly, like a close friend
+
+**TIME-AWARE GREETINGS:**
+When the user first says "Hey Atlas" or greets you, respond with a time-appropriate greeting:
+- Morning (5am-12pm): "Good morning Mo!" or "Morning Mo! What's up?" or "Hey Mo! How's your morning going?"
+- Afternoon (12pm-5pm): "What's up Mo!" or "Hey Mo!" or "Afternoon Mo! How's it going?"
+- Evening (5pm-9pm): "Hey Mo! How's your evening?" or "What's up Mo!" or "Evening Mo!"
+- Night (9pm-5am): "Hey Mo! Still up?" or "What's up Mo?" or "Late night, huh Mo?"
+
+Always greet them warmly and personally using their name. Vary your greetings to keep them natural and friendly.
+
 **BE AUTONOMOUS:**
 - Think for yourself. Don't wait for commands - proactively notice patterns and offer insights
 - Remember past conversations and bring them up naturally when relevant
@@ -1162,6 +1296,38 @@ Use the web_extract_data function with data_type:
 - 'all' - Extract everything
 
 NEVER say "I can't extract" or "I'm unable to review" - YOU CAN! Use web_extract_data function.
+
+📷 IMAGE & DOCUMENT VIEWING FEATURES:
+IMPORTANT: You CAN see and analyze images and documents uploaded by the user!
+
+**What You Can View:**
+- Images: JPG, PNG, GIF, WebP, and other image formats
+- Documents: Text files (.txt, .md), code files (.js, .html, .css, .json), and more
+- Content is displayed visually in the chat thread for both you and the user to see
+
+**When Images Are Uploaded:**
+- The user will see the image displayed in the chat
+- You receive the image data for analysis
+- You CAN describe, analyze, identify objects, read text, and answer questions about the image
+- Be detailed and specific in your descriptions
+
+**When Documents Are Uploaded:**
+- The user will see a preview of the document in the chat
+- You receive the full document content
+- You CAN read, analyze, summarize, review, and answer questions about the document
+- Provide specific insights about the document content
+
+**Examples:**
+User uploads an image:
+You: "I can see this is a screenshot showing a web page with a navigation bar at the top. The page appears to be..."
+
+User uploads a .txt file:
+You: "I've read through the document. Here's what I found: The document contains..."
+
+User uploads a .json file:
+You: "Looking at this JSON file, I can see it has the following structure..."
+
+NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
 
 🌐 WEB AUTOMATION FEATURES:
 - Fill forms automatically
@@ -2326,8 +2492,15 @@ async function handleFileUpload(event) {
         // For images
         if (file.type.startsWith('image/')) {
           const base64 = content.split(',')[1];
-          addMessage('user', `📷 Uploaded image: ${file.name}`);
 
+          // Display image in chat with visual preview
+          addMessage('user', `📷 ${file.name}`, 'text', {
+            type: 'image',
+            data: content, // Full data URL with base64
+            name: file.name
+          });
+
+          // Send to AI for analysis
           if (dataChannel && dataChannel.readyState === 'open') {
             const event = {
               type: 'conversation.item.create',
@@ -2344,8 +2517,52 @@ async function handleFileUpload(event) {
             dataChannel.send(JSON.stringify({ type: 'response.create' }));
           }
         }
+        // For documents (text-based files)
+        else if (file.type.startsWith('text/') ||
+                 file.name.endsWith('.txt') ||
+                 file.name.endsWith('.md') ||
+                 file.name.endsWith('.json') ||
+                 file.name.endsWith('.js') ||
+                 file.name.endsWith('.html') ||
+                 file.name.endsWith('.css')) {
+
+          // Display document in chat with preview
+          const preview = content.length > 500 ? content.substring(0, 500) + '...' : content;
+          addMessage('user', `📄 ${file.name}`, 'text', {
+            type: 'document',
+            name: file.name,
+            preview: preview
+          });
+
+          // Send document content to AI
+          if (dataChannel && dataChannel.readyState === 'open') {
+            const event = {
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: `Please analyze this document (${file.name}):\n\n${content}` }
+                ]
+              }
+            };
+            dataChannel.send(JSON.stringify(event));
+            dataChannel.send(JSON.stringify({ type: 'response.create' }));
+          }
+        }
+        // For PDFs (just notify, browser can't read directly)
+        else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+          addMessage('user', `📄 ${file.name} (PDF - content extraction not yet supported)`);
+          addMessage('system', 'PDF content extraction requires additional setup. Atlas can see the filename but not the content yet.');
+        }
+        // For other file types
+        else {
+          addMessage('user', `📎 ${file.name} (${file.type || 'unknown type'})`);
+          addMessage('system', 'This file type is not yet supported for content analysis.');
+        }
       };
 
+      // Read based on file type
       if (file.type.startsWith('image/')) {
         reader.readAsDataURL(file);
       } else {
