@@ -1498,6 +1498,19 @@ IMPORTANT:
           }
         }
 
+        // Handle AI audio transcript (for voice responses)
+        if (msg.type === 'response.audio_transcript.delta') {
+          currentAIMessage += msg.delta || '';
+        }
+
+        if (msg.type === 'response.audio_transcript.done') {
+          if (currentAIMessage) {
+            removeTypingIndicator();
+            addMessage('assistant', currentAIMessage);
+            currentAIMessage = '';
+          }
+        }
+
         if (msg.type === 'response.audio.start' || msg.type === 'response.audio_transcript.start') {
           showTypingIndicator();
         }
