@@ -4240,9 +4240,30 @@ async function executeBrowserCommand(action, params) {
   try {
     // Get the current active tab
     const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
+
     if (!currentTab) {
       return { error: 'No active tab found' };
+    }
+
+    // Check if we're on a restricted page
+    const restrictedPages = [
+      'chrome://',
+      'chrome-extension://',
+      'about:',
+      'edge://',
+      'brave://',
+      'data:',
+      'file://'
+    ];
+
+    const isRestricted = restrictedPages.some(prefix => currentTab.url?.startsWith(prefix));
+
+    if (isRestricted) {
+      console.log('ℹ️ Browser commands not available on restricted pages (chrome:// URLs, etc.)');
+      return {
+        error: 'Browser commands are not available on this page. Please navigate to a regular website.',
+        silent: true // Don't show error to user
+      };
     }
 
     // Send message to content script
@@ -4253,6 +4274,16 @@ async function executeBrowserCommand(action, params) {
 
     return response;
   } catch (error) {
+    // Check if it's a "receiving end does not exist" error (content script not loaded)
+    if (error.message?.includes('Receiving end does not exist')) {
+      console.log('ℹ️ Content script not loaded on this page. Browser commands unavailable.');
+      return {
+        error: 'Browser commands require navigating to a regular webpage first.',
+        silent: true
+      };
+    }
+
+    // Log other errors for debugging
     console.error('Browser command error:', error);
     return { error: error.message };
   }
