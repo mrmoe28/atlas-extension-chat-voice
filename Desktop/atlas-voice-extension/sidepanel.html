@@ -5,16 +5,29 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Atlas Voice</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- PDF.js library for PDF text extraction -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    // Configure PDF.js worker
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
+  <!-- PDF.js library for PDF text extraction (local copy for CSP compliance) -->
+  <script src="lib/pdf.min.js"></script>
 </head>
 <body>
+  <!-- Update Available Banner -->
+  <div id="update-banner" style="display:none; position:sticky; top:0; z-index:10000; padding:12px 14px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff; font-family:system-ui, sans-serif;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="font-size:24px;">🎉</span>
+      <div style="flex:1;">
+        <strong style="font-size:15px;">Atlas Update Available!</strong>
+        <div id="update-version-text" style="margin-top:4px; font-size:13px; opacity:0.95;">
+          Version <span id="update-version"></span> is ready to download.
+        </div>
+      </div>
+      <button id="update-install-btn" style="padding:8px 16px; border:none; background:#fff; color:#667eea; border-radius:6px; font-weight:600; cursor:pointer; font-size:13px;">
+        Download
+      </button>
+      <button id="update-dismiss-btn" style="padding:8px 12px; border:1px solid rgba(255,255,255,0.3); background:transparent; color:#fff; border-radius:6px; cursor:pointer; font-size:13px;">
+        Later
+      </button>
+    </div>
+  </div>
+
   <div id="mic-permission-banner" style="display:none; position:sticky; top:0; z-index:9999; padding:10px 12px; background:#fff7e6; border-bottom:1px solid #ffd39c; font-family:system-ui, sans-serif;">
     <strong>Microphone access needed.</strong>
     <div style="margin-top:6px; font-size:13px; line-height:1.35;">
@@ -540,6 +553,7 @@
     </div>
   </div>
 
+  <script src="lib/update-ui.js" type="module"></script>
   <script src="sidepanel.js" type="module"></script>
 </body>
 </html>

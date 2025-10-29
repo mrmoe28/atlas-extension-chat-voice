@@ -12,7 +12,9 @@
     "tabs",
     "downloads",
     "scripting",
-    "webNavigation"
+    "webNavigation",
+    "notifications",
+    "alarms"
   ],
   "host_permissions": [
     "https://api.openai.com/*",
@@ -25,7 +27,10 @@
     "48": "assets/icon-48.png",
     "128": "assets/icon-128.png"
   },
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "action": {
     "default_title": "Atlas Voice Panel",
     "default_icon": {

@@ -1,0 +1,56 @@
+name: Build Verification
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Validate manifest.json
+        run: |
+          if ! node -p "require('./manifest.json').version" > /dev/null 2>&1; then
+            echo "Error: Invalid manifest.json"
+            exit 1
+          fi
+          echo "✅ manifest.json is valid"
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          if [ ! -d "dev/build-tools/dist" ]; then
+            echo "Error: Build output directory not found"
+            exit 1
+          fi
+          if [ ! -f "dev/build-tools/dist/manifest.json" ]; then
+            echo "Error: manifest.json not found in build output"
+            exit 1
+          fi
+          echo "✅ Build verification successful"
+
+      - name: Check extension size
+        run: |
+          SIZE=$(du -sh dev/build-tools/dist | cut -f1)
+          echo "📦 Extension size: $SIZE"
+
+      - name: List build contents
+        run: |
+          echo "📁 Build contents:"
+          ls -lah dev/build-tools/dist/

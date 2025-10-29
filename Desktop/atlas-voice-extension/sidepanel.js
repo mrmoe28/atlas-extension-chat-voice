@@ -182,7 +182,34 @@ let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
 let memoryContext = ''; // Loaded memories for AI context
-let sessionId = Date.now().toString(); // Unique session ID for conversation tracking
+
+// Initialize persistent user ID and session management
+function initializeUserSession() {
+  // Get or create persistent user ID
+  let userId = localStorage.getItem('atlasVoice_userId');
+  if (!userId) {
+    // Generate unique user ID using crypto for better randomness
+    const randomBytes = crypto.getRandomValues(new Uint8Array(16));
+    userId = 'user_' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('atlasVoice_userId', userId);
+    console.log('🆔 Created new user ID:', userId);
+  } else {
+    console.log('🆔 Using existing user ID:', userId);
+  }
+
+  // Create new session ID (tied to user but unique per launch)
+  const sessionId = userId + '_session_' + Date.now().toString();
+
+  // Save session state
+  localStorage.setItem('atlasVoice_lastSessionId', sessionId);
+  localStorage.setItem('atlasVoice_lastSessionTime', new Date().toISOString());
+
+  return { userId, sessionId };
+}
+
+// Initialize user and session
+const { userId, sessionId } = initializeUserSession();
+console.log('🚀 Atlas initialized with User ID:', userId.substring(0, 20) + '...');
 
 // Settings Modal Management
 let isModalOpen = false;
@@ -601,6 +628,56 @@ function getTimeContext() {
 - Use this to provide time-appropriate greetings when the user first interacts with you\n\n`;
 }
 
+// Load recent conversation history for context continuity
+async function loadRecentConversation(limit = 20) {
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) return '';
+
+    console.log('📜 Loading recent conversation history...');
+
+    // Try to load from last session first
+    const lastSessionId = localStorage.getItem('atlasVoice_lastSessionId');
+    const sessionToLoad = lastSessionId || sessionId;
+
+    const response = await fetch(`${serverUrl}/api/conversation/${sessionToLoad}?user_id=${userId}&limit=${limit}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      console.log('ℹ️ No previous conversation found (first time user or new session)');
+      return '';
+    }
+
+    const data = await response.json();
+    if (!data.data || data.data.length === 0) {
+      console.log('ℹ️ No previous messages in history');
+      return '';
+    }
+
+    // Format as conversation context
+    let context = '\n\n📋 RECENT CONVERSATION HISTORY:\n';
+    context += `(Loaded ${data.data.length} previous messages from your last session)\n\n`;
+
+    data.data.reverse().forEach(msg => {
+      const role = msg.role === 'user' ? 'User' : 'Atlas';
+      const truncated = msg.content.length > 150
+        ? msg.content.substring(0, 150) + '...'
+        : msg.content;
+      context += `${role}: ${truncated}\n`;
+    });
+
+    context += '\nℹ️ Use this context to maintain conversation continuity and recall previous topics.\n\n';
+
+    console.log(`✅ Loaded ${data.data.length} messages from conversation history`);
+    return context;
+  } catch (error) {
+    console.error('Error loading conversation history:', error);
+    return '';
+  }
+}
+
 async function loadMemories() {
   if (!els.memoryEnabled.checked) {
     console.log('💾 Memory disabled by user');
@@ -616,7 +693,7 @@ async function loadMemories() {
     }
 
     console.log('🧠 Loading memories from database...');
-    const response = await fetch(`${serverUrl}/api/knowledge`, {
+    const response = await fetch(`${serverUrl}/api/knowledge?user_id=${userId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -691,7 +768,7 @@ async function saveConversationToDB(role, content) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id: 'default',
+        user_id: userId, // Use persistent user ID instead of 'default'
         session_id: sessionId,
         role: role,
         content: content,
@@ -737,7 +814,7 @@ async function extractAndSaveMemory(userMessage, aiResponse) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: 'default',
+          user_id: userId,
           memory_type: memoryType,
           content: content,
           importance_score: 7
@@ -795,7 +872,7 @@ async function analyzeSpeechPatterns(userMessage, aiResponse) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id: 'default',
+        user_id: userId,
         pattern_type: 'speech_style',
         pattern_data: patterns,
         confidence_score: calculateConfidence(userMessage)
@@ -919,8 +996,16 @@ async function connectRealtime() {
     const { client_secret, model, endpoint } = await getEphemeralToken(els.serverUrl.value.trim());
     console.log('✅ Ephemeral token received');
 
-    // Load long-term memories if enabled
+    // Load long-term memories and conversation history if enabled
+    console.log('🧠 Loading full memory context...');
     await loadMemories();
+    const conversationHistory = await loadRecentConversation();
+
+    // Combine memories and conversation history
+    if (conversationHistory) {
+      memoryContext = conversationHistory + memoryContext;
+      console.log('✅ Full context loaded with conversation history');
+    }
 
     // Create new peer connection
     pc = new RTCPeerConnection();
@@ -2138,7 +2223,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      user_id: 'default',
+                      user_id: userId,
                       category: category,
                       title: `Web Search: ${args.query}`,
                       content: `Search query: ${args.query}\nSearch URL: ${searchUrl}\nPerformed at: ${new Date().toISOString()}`,
@@ -2608,6 +2693,11 @@ async function handleFileUpload(event) {
           try {
             showTypingIndicator();
             addMessage('user', `📄 ${file.name} (extracting text...)`);
+
+            // Configure PDF.js worker (must be done before loading)
+            if (typeof pdfjsLib !== 'undefined') {
+              pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+            }
 
             // Load PDF using PDF.js
             const loadingTask = pdfjsLib.getDocument({ data: content });
@@ -4376,7 +4466,7 @@ els.clearMemoryBtn.addEventListener('click', async () => {
       const response = await fetch(`${serverUrl}/api/knowledge/clear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: 'default' })
+        body: JSON.stringify({ user_id: userId })
       });
 
       if (response.ok) {

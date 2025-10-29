@@ -172,7 +172,6 @@ function handleClickElement(request, sendResponse) {
         suggestions: suggestions
       });
     }
-    }
   } catch (error) {
     sendResponse({ error: error.message });
   }

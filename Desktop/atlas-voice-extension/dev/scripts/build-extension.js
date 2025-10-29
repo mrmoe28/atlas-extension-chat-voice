@@ -18,12 +18,13 @@ async function copyDirectory(src, dest) {
   // Extension files to include
   const extensionFiles = [
     'manifest.json',
-    'background.js', 
+    'background.js',
     'content.js',
     'sidepanel.html',
     'sidepanel.js',
     'styles.css',
-    'assets'
+    'assets',
+    'lib'  // PDF.js library
   ];
   
   for (const entry of entries) {

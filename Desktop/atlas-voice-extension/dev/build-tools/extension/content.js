@@ -69,13 +69,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'extractData':
         handleExtractData(request, sendResponse);
         break;
-<<<<<<< HEAD
       case 'debugElements':
         handleDebugElements(request, sendResponse);
         break;
-      default:
-        sendResponse({ error: 'Unknown action' });
-=======
       case 'waitForElement':
         handleWaitForElement(request, sendResponse);
         break;
@@ -100,7 +96,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'simulateFileUpload':
         handleSimulateFileUpload(request, sendResponse);
         break;
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
+      default:
+        sendResponse({ error: 'Unknown action' });
     }
   } catch (error) {
     console.error('Content script error:', error);
@@ -110,54 +107,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
-<<<<<<< HEAD
-// Click an element by selector
-function handleClickElement(request, sendResponse) {
-  try {
-    const { selector, text } = request;
-=======
 // Enhanced click element with advanced detection and visual feedback
 function handleClickElement(request, sendResponse) {
   try {
     const { selector, text, element_type, wait_for_visible = true, highlight = true } = request;
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
     let element;
-    
+
     if (selector) {
       element = document.querySelector(selector);
     } else if (text) {
       // Find element by text content with smart matching
-<<<<<<< HEAD
-      element = findElementByTextSmart(text);
-    }
-    
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => {
-        element.click();
-        sendResponse({ success: true, message: `Clicked element: ${selector || text}` });
-      }, 500);
-    } else {
-      sendResponse({ error: `Element not found: ${selector || text}` });
-=======
       element = findElementByTextSmart(text, element_type);
     }
-    
+
     if (element) {
       // Check if element is visible and interactable
       if (wait_for_visible && !isElementInteractable(element)) {
         sendResponse({ error: `Element found but not interactable: ${selector || text}` });
         return;
       }
-      
+
       // Highlight element before clicking (for user feedback)
       if (highlight) {
         highlightElement(element);
       }
-      
+
       // Scroll element into view
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
+
       // Wait for scroll to complete, then click
       setTimeout(() => {
         try {
@@ -173,9 +150,9 @@ function handleClickElement(request, sendResponse) {
             });
             element.dispatchEvent(clickEvent);
           }
-          
-          sendResponse({ 
-            success: true, 
+
+          sendResponse({
+            success: true,
             message: `Clicked element: ${selector || text}`,
             element_info: {
               tagName: element.tagName,
@@ -190,11 +167,10 @@ function handleClickElement(request, sendResponse) {
     } else {
       // Enhanced error reporting with suggestions
       const suggestions = generateClickSuggestions(text || selector);
-      sendResponse({ 
+      sendResponse({
         error: `Element not found: ${selector || text}`,
         suggestions: suggestions
       });
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
     }
   } catch (error) {
     sendResponse({ error: error.message });
@@ -357,10 +333,6 @@ function handleMouseClick(request, sendResponse) {
   }
 }
 
-<<<<<<< HEAD
-// Helper function to find element by text with smart matching
-function findElementByTextSmart(text) {
-=======
 // Helper function to check if element is interactable
 function isElementInteractable(element) {
   const rect = element.getBoundingClientRect();
@@ -432,7 +404,6 @@ function generateClickSuggestions(searchText) {
 
 // Helper function to find element by text with smart matching
 function findElementByTextSmart(text, elementType = null) {
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
   const searchText = text.toLowerCase().trim();
   const elements = document.querySelectorAll('*');
   
@@ -982,8 +953,6 @@ function handleExtractData(request, sendResponse) {
   }
 }
 
-<<<<<<< HEAD
-=======
 // Wait for element to appear (useful for dynamic content)
 function handleWaitForElement(request, sendResponse) {
   try {
@@ -1579,7 +1548,6 @@ function getMimeTypeFromFileName(fileName) {
   return mimeTypes[extension] || 'application/octet-stream';
 }
 
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
 // Debug elements on page
 function handleDebugElements(request, sendResponse) {
   try {
