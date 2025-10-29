@@ -611,7 +611,7 @@ async function connectRealtime() {
 - Write SQL queries, database schemas
 - Create HTML/CSS/JavaScript for web pages
 - Format all code with proper syntax highlighting
-- Always wrap code in triple backticks with language name (```javascript, ```python, etc.)
+- Always wrap code in triple backticks with language name (\`\`\`javascript, \`\`\`python, etc.)
 
 📄 DOCUMENT READING FEATURES:
 - Extract text from PDF documents
@@ -717,7 +717,7 @@ Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS
 - Write SQL queries, database schemas
 - Create HTML/CSS/JavaScript for web pages
 - Format all code with proper syntax highlighting
-- Always wrap code in triple backticks with language name (```javascript, ```python, etc.)
+- Always wrap code in triple backticks with language name (\`\`\`javascript, \`\`\`python, etc.)
 
 💡 PROMPT GENERATION FEATURES:
 - Create structured prompts for Claude code assistant
