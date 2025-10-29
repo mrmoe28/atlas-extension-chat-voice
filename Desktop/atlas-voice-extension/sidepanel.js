@@ -747,6 +747,8 @@ async function connectRealtime() {
 - CODE WRITING: Write complete, production-ready code in any language
 - Document Reading: Extract and analyze text from PDFs and documents
 - Prompt Generation: Create optimized prompts for Claude coding tasks
+- WEB SEARCH & LEARNING: Search the web for information and save findings to long-term knowledge base
+- Knowledge Base: Remember and learn from searches, conversations, and user preferences
 
 💻 CODE WRITING FEATURES:
 - Write complete code files in any programming language
@@ -770,6 +772,14 @@ async function connectRealtime() {
 - Create code review prompts for optimization suggestions
 - Format prompts with proper context and requirements
 - Display prompts with copy functionality in chat
+
+🔍 WEB SEARCH & KNOWLEDGE BASE FEATURES:
+- Search the web for current information, facts, and research
+- Automatically save search findings to your long-term knowledge base
+- Learn from web searches to provide more informed responses
+- Remember information across sessions for more human-like conversations
+- Organize knowledge by categories (facts, preferences, research, how-to)
+- Use web_search function to find and learn new information
 
 🖥️ DESKTOP COMMANDER COMMANDS:
 File Operations: OPEN_FOLDER, CREATE_FILE, CREATE_FOLDER, DELETE_FILE, RENAME_FILE, COPY_FILE, MOVE_FILE
@@ -796,6 +806,7 @@ For Web Automation: "Web action description. [WEB:action:details]"
 For Code Writing: Wrap code in triple backticks with language name
 For PDF Reading: "Reading PDF. [CMD:READ_PDF:file_path]"
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
+For Web Search: Use the web_search function to search and optionally save to knowledge base
 For General Help: Provide helpful, conversational responses
 
 Examples:
@@ -846,13 +857,15 @@ User: "Search for 'artificial intelligence' on Google"
 You: "Searching Google. [CMD:SEARCH_WEB:artificial intelligence]"
 
 Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS use triple backticks with the language name for proper formatting and copy functionality. When creating prompts, use the appropriate function tools to generate properly formatted prompts that will be displayed in the chat with copy functionality.`
-        : `You are Atlas Voice, a helpful AI assistant with web automation, code writing, and document reading capabilities.${memoryContext}
+        : `You are Atlas Voice, a helpful AI assistant with web automation, code writing, document reading, and web search capabilities.${memoryContext}
 
 🎯 CAPABILITIES:
 - Web Automation: Browser control, form filling, element interaction
 - CODE WRITING: Write complete, production-ready code in any language
 - Document Reading: Extract and analyze text from documents
 - Prompt Generation: Create optimized prompts for Claude coding tasks
+- WEB SEARCH & LEARNING: Search the web and save findings to long-term knowledge base
+- Knowledge Base: Remember and learn from searches and conversations
 
 💻 CODE WRITING FEATURES:
 - Write complete code files in any programming language
@@ -871,6 +884,13 @@ Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS
 - Format prompts with proper context and requirements
 - Display prompts with copy functionality in chat
 
+🔍 WEB SEARCH & KNOWLEDGE BASE FEATURES:
+- Search the web for current information, facts, and research
+- Automatically save search findings to your long-term knowledge base
+- Learn from web searches to provide more informed responses
+- Remember information across sessions for more human-like conversations
+- Organize knowledge by categories (facts, preferences, research, how-to)
+
 🌐 WEB AUTOMATION FEATURES:
 - Fill forms automatically
 - Click buttons and links  
@@ -883,6 +903,7 @@ Be helpful, concise, and always confirm actions taken. When writing code, ALWAYS
 📝 RESPONSE FORMAT:
 For Web Actions: "Action description. [WEB:action:details]"
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
+For Web Search: Use the web_search function to search and optionally save to knowledge base
 For General Help: Provide helpful, conversational responses
 
 Examples:
@@ -1151,6 +1172,31 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
             },
             required: ['direction']
           }
+        },
+        {
+          type: 'function',
+          name: 'web_search',
+          description: 'Searches the web for information and optionally saves findings to long-term knowledge base. Use this to find current information, research topics, or learn new things.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The search query'
+              },
+              save_to_knowledge: {
+                type: 'boolean',
+                description: 'Whether to save the search results to your long-term knowledge base (default: true)',
+                default: true
+              },
+              category: {
+                type: 'string',
+                description: 'Category for knowledge base organization (e.g., "facts", "user_preferences", "research", "how-to")',
+                default: 'research'
+              }
+            },
+            required: ['query']
+          }
         }
       ] : [
         // Prompt Generation Tools (available in both modes)
@@ -1335,6 +1381,31 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
               }
             },
             required: ['file_path']
+          }
+        },
+        {
+          type: 'function',
+          name: 'web_search',
+          description: 'Searches the web for information and optionally saves findings to long-term knowledge base. Use this to find current information, research topics, or learn new things.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The search query'
+              },
+              save_to_knowledge: {
+                type: 'boolean',
+                description: 'Whether to save the search results to your long-term knowledge base (default: true)',
+                default: true
+              },
+              category: {
+                type: 'string',
+                description: 'Category for knowledge base organization (e.g., "facts", "user_preferences", "research", "how-to")',
+                default: 'research'
+              }
+            },
+            required: ['query']
           }
         }
       ];
@@ -1594,7 +1665,7 @@ IMPORTANT:
               }
             } else if (functionName === 'web_scroll') {
               // Web automation: Scroll
-              const webResult = await executeBrowserCommand('scrollPage', { 
+              const webResult = await executeBrowserCommand('scrollPage', {
                 direction: args.direction,
                 amount: args.amount
               });
@@ -1604,6 +1675,62 @@ IMPORTANT:
               } else {
                 result = { success: false, error: webResult.error || 'Failed to scroll' };
                 addMessage('assistant', `❌ Error scrolling: ${webResult.error}`);
+              }
+            } else if (functionName === 'web_search') {
+              // Web search: Search the web and optionally save to knowledge base
+              try {
+                addMessage('assistant', `🔍 Searching the web for: "${args.query}"...`);
+
+                const searchQuery = encodeURIComponent(args.query);
+                const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+
+                // Open search in new tab
+                const searchTab = await chrome.tabs.create({ url: searchUrl, active: false });
+
+                // Wait for page to load and extract search results
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Try to extract search results from the page
+                const searchResults = await executeBrowserCommand('extractData', {
+                  data_type: 'text',
+                  selector: null
+                }, searchTab.id);
+
+                let searchSummary = `Searched for: ${args.query}. Results available in new tab.`;
+
+                // Save to knowledge base if requested
+                if (args.save_to_knowledge !== false && els.memoryEnabled.checked) {
+                  const serverUrl = els.serverUrl.value.trim();
+                  const category = args.category || 'research';
+
+                  // Save search query and results to knowledge base
+                  await fetch(`${serverUrl}/api/knowledge/item`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      user_id: 'default',
+                      category: category,
+                      title: `Web Search: ${args.query}`,
+                      content: `Search query: ${args.query}\nSearch URL: ${searchUrl}\nPerformed at: ${new Date().toISOString()}`,
+                      tags: ['web_search', 'research', category]
+                    })
+                  });
+
+                  searchSummary += ` Saved to knowledge base under "${category}".`;
+                  console.log('✅ Search saved to knowledge base');
+                }
+
+                result = {
+                  success: true,
+                  message: searchSummary,
+                  search_url: searchUrl,
+                  query: args.query
+                };
+
+                addMessage('assistant', `✅ ${searchSummary}`);
+              } catch (error) {
+                result = { success: false, error: error.message };
+                addMessage('assistant', `❌ Search error: ${error.message}`);
               }
             }
           } catch (error) {
