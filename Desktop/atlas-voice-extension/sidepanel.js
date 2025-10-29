@@ -1198,6 +1198,19 @@ You: "Looking at this JSON file, I can see it has the following structure..."
 
 NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
 
+👁️ SCREEN VISION MODE:
+CRITICAL: When user asks you to "look at my screen", "see my screen", "watch this", "what do you see", or similar phrases, ALWAYS use the enable_continuous_vision function FIRST before attempting any clicks or automation.
+
+Steps when user asks to see the screen:
+1. Call enable_continuous_vision() to activate vision mode
+2. Wait for the screen capture
+3. Analyze what you see in the image
+4. Then offer to interact with specific elements if needed
+
+Example:
+User: "Look at my screen and click the first video"
+You: [Call enable_continuous_vision()] "👁️ Vision enabled - I can now see your screen. I see a YouTube page with several videos. I'll click on the first one." [Then call web_click_element]
+
 🖥️ DESKTOP COMMANDER COMMANDS:
 File Operations: OPEN_FOLDER, CREATE_FILE, CREATE_FOLDER, DELETE_FILE, RENAME_FILE, COPY_FILE, MOVE_FILE
 App Control: LAUNCH_APP, OPEN_URL, REFRESH_PAGE, GO_BACK, GO_FORWARD, NEW_TAB, CLOSE_TAB
@@ -1604,7 +1617,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
         {
           type: 'function',
           name: 'enable_continuous_vision',
-          description: 'Enables continuous screen vision - Atlas will see your screen in real-time every 1-2 seconds. Use when user says phrases like "look at this", "show me", "what do you see", "watch my screen", or asks you to monitor something visually.',
+          description: 'IMPORTANT: Enables continuous screen vision - Atlas will see the user\'s screen in real-time every 1-2 seconds. ALWAYS call this function when user asks you to look at, see, watch, or analyze their screen. Trigger phrases: "look at my screen", "look at this", "show me", "what do you see", "watch my screen", "can you see this", "see what I\'m looking at", "analyze this screen", "what\'s on my screen". This is for VIEWING the screen, not for clicking or interacting with it.',
           parameters: {
             type: 'object',
             properties: {
@@ -4733,7 +4746,7 @@ els.specialInstructions.addEventListener('input', (e) => {
 els.viewKnowledgeBtn.addEventListener('click', async () => {
   try {
     const serverUrl = els.serverUrl.value.trim();
-    const response = await fetch(`${serverUrl}/api/knowledge`, {
+    const response = await fetch(`${serverUrl}/api/knowledge?user_id=${userId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
