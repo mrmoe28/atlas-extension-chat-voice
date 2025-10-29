@@ -69,13 +69,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'extractData':
         handleExtractData(request, sendResponse);
         break;
-<<<<<<< HEAD
       case 'debugElements':
         handleDebugElements(request, sendResponse);
         break;
-      default:
-        sendResponse({ error: 'Unknown action' });
-=======
       case 'waitForElement':
         handleWaitForElement(request, sendResponse);
         break;
@@ -100,7 +96,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       case 'simulateFileUpload':
         handleSimulateFileUpload(request, sendResponse);
         break;
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
+      default:
+        sendResponse({ error: 'Unknown action' });
     }
   } catch (error) {
     console.error('Content script error:', error);
@@ -110,54 +107,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
-<<<<<<< HEAD
-// Click an element by selector
-function handleClickElement(request, sendResponse) {
-  try {
-    const { selector, text } = request;
-=======
 // Enhanced click element with advanced detection and visual feedback
 function handleClickElement(request, sendResponse) {
   try {
     const { selector, text, element_type, wait_for_visible = true, highlight = true } = request;
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
     let element;
-    
+
     if (selector) {
       element = document.querySelector(selector);
     } else if (text) {
       // Find element by text content with smart matching
-<<<<<<< HEAD
-      element = findElementByTextSmart(text);
-    }
-    
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => {
-        element.click();
-        sendResponse({ success: true, message: `Clicked element: ${selector || text}` });
-      }, 500);
-    } else {
-      sendResponse({ error: `Element not found: ${selector || text}` });
-=======
       element = findElementByTextSmart(text, element_type);
     }
-    
+
     if (element) {
       // Check if element is visible and interactable
       if (wait_for_visible && !isElementInteractable(element)) {
         sendResponse({ error: `Element found but not interactable: ${selector || text}` });
         return;
       }
-      
+
       // Highlight element before clicking (for user feedback)
       if (highlight) {
         highlightElement(element);
       }
-      
+
       // Scroll element into view
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
+
       // Wait for scroll to complete, then click
       setTimeout(() => {
         try {
@@ -173,9 +150,9 @@ function handleClickElement(request, sendResponse) {
             });
             element.dispatchEvent(clickEvent);
           }
-          
-          sendResponse({ 
-            success: true, 
+
+          sendResponse({
+            success: true,
             message: `Clicked element: ${selector || text}`,
             element_info: {
               tagName: element.tagName,
@@ -190,11 +167,11 @@ function handleClickElement(request, sendResponse) {
     } else {
       // Enhanced error reporting with suggestions
       const suggestions = generateClickSuggestions(text || selector);
-      sendResponse({ 
+      sendResponse({
         error: `Element not found: ${selector || text}`,
         suggestions: suggestions
       });
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
+    }
     }
   } catch (error) {
     sendResponse({ error: error.message });
@@ -357,28 +334,24 @@ function handleMouseClick(request, sendResponse) {
   }
 }
 
-<<<<<<< HEAD
-// Helper function to find element by text with smart matching
-function findElementByTextSmart(text) {
-=======
 // Helper function to check if element is interactable
 function isElementInteractable(element) {
   const rect = element.getBoundingClientRect();
   const style = window.getComputedStyle(element);
-  
+
   // Check if element is visible
   if (rect.width === 0 || rect.height === 0) return false;
   if (style.display === 'none' || style.visibility === 'hidden') return false;
   if (style.opacity === '0') return false;
-  
+
   // Check if element is enabled
   if (element.disabled) return false;
-  
+
   // Check if element is in viewport
-  if (rect.top < 0 || rect.left < 0 || 
-      rect.bottom > window.innerHeight || 
+  if (rect.top < 0 || rect.left < 0 ||
+      rect.bottom > window.innerHeight ||
       rect.right > window.innerWidth) return false;
-  
+
   return true;
 }
 
@@ -386,11 +359,11 @@ function isElementInteractable(element) {
 function generateClickSuggestions(searchText) {
   const suggestions = [];
   const lowerText = searchText.toLowerCase();
-  
+
   // Find similar elements
   const allElements = document.querySelectorAll('button, a, input[type="submit"], input[type="button"], [role="button"]');
   const similarElements = [];
-  
+
   for (const element of allElements) {
     const text = element.textContent?.toLowerCase() || '';
     const attributes = [
@@ -399,7 +372,7 @@ function generateClickSuggestions(searchText) {
       element.getAttribute('placeholder'),
       element.getAttribute('value')
     ].filter(Boolean).map(attr => attr.toLowerCase());
-    
+
     if (text.includes(lowerText) || attributes.some(attr => attr.includes(lowerText))) {
       similarElements.push({
         text: element.textContent?.trim().substring(0, 30),
@@ -409,11 +382,11 @@ function generateClickSuggestions(searchText) {
       });
     }
   }
-  
+
   if (similarElements.length > 0) {
     suggestions.push('Similar elements found:', ...similarElements.slice(0, 5));
   }
-  
+
   // Suggest common selectors
   const commonSelectors = [
     'button',
@@ -424,15 +397,14 @@ function generateClickSuggestions(searchText) {
     '.btn',
     '.button'
   ];
-  
+
   suggestions.push('Try these selectors:', ...commonSelectors);
-  
+
   return suggestions;
 }
 
 // Helper function to find element by text with smart matching
 function findElementByTextSmart(text, elementType = null) {
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
   const searchText = text.toLowerCase().trim();
   const elements = document.querySelectorAll('*');
   
@@ -982,8 +954,6 @@ function handleExtractData(request, sendResponse) {
   }
 }
 
-<<<<<<< HEAD
-=======
 // Wait for element to appear (useful for dynamic content)
 function handleWaitForElement(request, sendResponse) {
   try {
@@ -1575,11 +1545,10 @@ function getMimeTypeFromFileName(fileName) {
     'zip': 'application/zip',
     'rar': 'application/x-rar-compressed'
   };
-  
+
   return mimeTypes[extension] || 'application/octet-stream';
 }
 
->>>>>>> 7604da7 (Initial commit: Atlas Voice Panel Extension with Enhanced Browser Automation)
 // Debug elements on page
 function handleDebugElements(request, sendResponse) {
   try {
