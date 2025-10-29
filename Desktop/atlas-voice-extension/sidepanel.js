@@ -3463,11 +3463,12 @@ els.specialInstructions.addEventListener('input', (e) => {
 // View knowledge base
 els.viewKnowledgeBtn.addEventListener('click', async () => {
   try {
-    const response = await fetch('http://localhost:8787/api/knowledge', {
+    const serverUrl = els.serverUrl.value.trim();
+    const response = await fetch(`${serverUrl}/api/knowledge`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       showKnowledgeModal(data);
@@ -3484,11 +3485,13 @@ els.viewKnowledgeBtn.addEventListener('click', async () => {
 els.clearMemoryBtn.addEventListener('click', async () => {
   if (confirm('Are you sure you want to clear Atlas\'s memory? This cannot be undone.')) {
     try {
-      const response = await fetch('http://localhost:8787/api/knowledge/clear', {
+      const serverUrl = els.serverUrl.value.trim();
+      const response = await fetch(`${serverUrl}/api/knowledge/clear`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: 'default' })
       });
-      
+
       if (response.ok) {
         alert('Memory cleared successfully!');
       } else {

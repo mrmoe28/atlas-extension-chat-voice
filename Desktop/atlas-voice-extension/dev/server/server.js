@@ -3,10 +3,31 @@ import express from 'express';
 import fetch from 'node-fetch';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import {
+  initializeDatabase,
+  saveMemory,
+  getMemories,
+  getConversationHistory,
+  saveConversation,
+  getPatterns,
+  savePattern,
+  getKnowledge,
+  saveKnowledge,
+  clearAllMemory
+} from './database.js';
 
 const execAsync = promisify(exec);
 const app = express();
 const PORT = process.env.PORT || 8787;
+
+// Initialize database on startup
+initializeDatabase().then(result => {
+  if (result.success) {
+    console.log('✅ Database ready');
+  } else {
+    console.log('⚠️  Database initialization skipped:', result.message);
+  }
+});
 
 // Parse JSON bodies
 app.use(express.json());
@@ -23,42 +44,20 @@ app.use((req, res, next) => {
 // Knowledge Base API endpoints
 app.get('/api/knowledge', async (req, res) => {
   try {
-    // This would connect to your PostgreSQL database
-    // For now, return mock data
-    const mockData = {
-      memory: [
-        {
-          id: 1,
-          memory_type: 'preference',
-          content: 'User prefers concise responses',
-          importance_score: 8,
-          access_count: 5,
-          created_at: new Date().toISOString()
-        }
-      ],
-      patterns: [
-        {
-          id: 1,
-          pattern_type: 'command_usage',
-          pattern_data: { command: 'OPEN_FOLDER', frequency: 10 },
-          confidence_score: 0.9,
-          frequency: 10,
-          first_seen: new Date().toISOString()
-        }
-      ],
-      knowledge: [
-        {
-          id: 1,
-          category: 'fact',
-          title: 'User\'s Downloads folder',
-          content: 'User frequently accesses ~/Downloads folder',
-          access_count: 15,
-          created_at: new Date().toISOString()
-        }
-      ]
-    };
-    
-    res.json(mockData);
+    const userId = req.query.user_id || 'default';
+
+    // Fetch all knowledge data from database
+    const [memoriesResult, patternsResult, knowledgeResult] = await Promise.all([
+      getMemories(userId, 50),
+      getPatterns(userId),
+      getKnowledge(userId)
+    ]);
+
+    res.json({
+      memory: memoriesResult.data || [],
+      patterns: patternsResult.data || [],
+      knowledge: knowledgeResult.data || []
+    });
   } catch (error) {
     console.error('Error fetching knowledge:', error);
     res.status(500).json({ error: 'Failed to fetch knowledge base' });
@@ -67,9 +66,14 @@ app.get('/api/knowledge', async (req, res) => {
 
 app.post('/api/knowledge/clear', async (req, res) => {
   try {
-    // This would clear the database tables
-    // For now, just return success
-    res.json({ message: 'Memory cleared successfully' });
+    const userId = req.body.user_id || 'default';
+    const result = await clearAllMemory(userId);
+
+    if (result.success) {
+      res.json({ message: 'Memory cleared successfully' });
+    } else {
+      res.status(500).json({ error: result.message || 'Failed to clear memory' });
+    }
   } catch (error) {
     console.error('Error clearing memory:', error);
     res.status(500).json({ error: 'Failed to clear memory' });
@@ -78,17 +82,96 @@ app.post('/api/knowledge/clear', async (req, res) => {
 
 app.post('/api/knowledge/memory', async (req, res) => {
   try {
-    const { user_id, memory_type, content, importance_score, context } = req.body;
-    
-    // This would insert into the atlas_memory table
-    // For now, just return success
-    res.json({ 
-      message: 'Memory saved successfully',
-      id: Date.now() // Mock ID
-    });
+    const { user_id, memory_type, content, importance_score } = req.body;
+    const userId = user_id || 'default';
+
+    const result = await saveMemory(userId, memory_type, content, importance_score || 5);
+
+    if (result.success) {
+      res.json({
+        message: 'Memory saved successfully',
+        data: result.data
+      });
+    } else {
+      res.status(500).json({ error: result.message || 'Failed to save memory' });
+    }
   } catch (error) {
     console.error('Error saving memory:', error);
     res.status(500).json({ error: 'Failed to save memory' });
+  }
+});
+
+// New endpoints for conversations, patterns, and knowledge
+app.post('/api/conversation', async (req, res) => {
+  try {
+    const { user_id, session_id, role, content, metadata } = req.body;
+    const userId = user_id || 'default';
+    const sessionId = session_id || 'default';
+
+    const result = await saveConversation(userId, sessionId, role, content, metadata);
+
+    if (result.success) {
+      res.json({ message: 'Conversation saved', data: result.data });
+    } else {
+      res.status(500).json({ error: result.message });
+    }
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+app.get('/api/conversation/:sessionId', async (req, res) => {
+  try {
+    const userId = req.query.user_id || 'default';
+    const { sessionId } = req.params;
+
+    const result = await getConversationHistory(userId, sessionId);
+
+    if (result.success) {
+      res.json({ data: result.data });
+    } else {
+      res.status(500).json({ error: result.message });
+    }
+  } catch (error) {
+    console.error('Error getting conversation:', error);
+    res.status(500).json({ error: 'Failed to get conversation' });
+  }
+});
+
+app.post('/api/pattern', async (req, res) => {
+  try {
+    const { user_id, pattern_type, pattern_data, confidence_score } = req.body;
+    const userId = user_id || 'default';
+
+    const result = await savePattern(userId, pattern_type, pattern_data, confidence_score);
+
+    if (result.success) {
+      res.json({ message: 'Pattern saved', data: result.data });
+    } else {
+      res.status(500).json({ error: result.message });
+    }
+  } catch (error) {
+    console.error('Error saving pattern:', error);
+    res.status(500).json({ error: 'Failed to save pattern' });
+  }
+});
+
+app.post('/api/knowledge/item', async (req, res) => {
+  try {
+    const { user_id, category, title, content, tags } = req.body;
+    const userId = user_id || 'default';
+
+    const result = await saveKnowledge(userId, category, title, content, tags || []);
+
+    if (result.success) {
+      res.json({ message: 'Knowledge saved', data: result.data });
+    } else {
+      res.status(500).json({ error: result.message });
+    }
+  } catch (error) {
+    console.error('Error saving knowledge:', error);
+    res.status(500).json({ error: 'Failed to save knowledge' });
   }
 });
 
