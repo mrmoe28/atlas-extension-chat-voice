@@ -425,13 +425,24 @@ app.post('/api/vision', async (req, res) => {
       return res.status(400).json({ error: 'Image required' });
     }
 
+    // Check if API key is configured
+    const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+    if (!apiKey || apiKey === '') {
+      console.error('OPENAI_API_KEY not configured');
+      return res.status(500).json({
+        error: 'OPENAI_API_KEY not configured',
+        message: 'Please add your OpenAI API key to Vercel environment variables'
+      });
+    }
+
     console.log('Analyzing screenshot with GPT-4 Vision...');
+    console.log('API Key present:', apiKey.substring(0, 7) + '...');
 
     // Call OpenAI Vision API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${(process.env.OPENAI_API_KEY || '').trim()}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -460,7 +471,12 @@ app.post('/api/vision', async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Vision API error:', response.status, errorText);
-      throw new Error(`Vision API failed: ${response.status}`);
+      // Return detailed error to client for debugging
+      return res.status(response.status).json({
+        error: `Vision API failed: ${response.status}`,
+        details: errorText,
+        message: 'OpenAI API error - check API key and model access'
+      });
     }
 
     const data = await response.json();

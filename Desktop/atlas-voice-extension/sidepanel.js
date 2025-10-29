@@ -2560,7 +2560,9 @@ async function handleFileUpload(event) {
               extractAndSaveMemory(`[Uploaded image: ${file.name}]`, result.description);
             } else {
               const errorMsg = result.error || 'Unknown error';
-              addMessage('assistant', `I can see the image "${file.name}", but I had trouble analyzing it: ${errorMsg}`);
+              const details = result.details ? `\n\nDetails: ${result.details}` : '';
+              const message = result.message ? `\n${result.message}` : '';
+              addMessage('assistant', `I can see the image "${file.name}", but I had trouble analyzing it:\n\n${errorMsg}${message}${details}`);
             }
           } catch (error) {
             console.error('Image analysis error:', error);
