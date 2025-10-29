@@ -1853,17 +1853,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
       const sessionUpdate = {
         type: 'session.update',
         session: {
-          instructions: (isDesktopMode
-            ? `You are Atlas Voice, a helpful desktop assistant. Be conversational and natural.
-
-IMPORTANT:
-- ALWAYS ask clarifying questions before taking actions
-- If user says "create a file", ask "What would you like to name it?" and "Where should I save it?"
-- If user says "open folder", ask which folder if unclear
-- Be friendly and helpful, not robotic
-- Keep responses concise but complete
-- Never show function syntax to users`
-            : `You are Atlas Voice, a helpful AI assistant. Be conversational and concise.`) + memoryContext,
+          instructions: instructions, // Use the comprehensive instructions we defined earlier
           voice: 'alloy',
           tools: tools,
           tool_choice: 'auto',
@@ -1880,6 +1870,7 @@ IMPORTANT:
       };
 
       console.log('🚀 Sending session update. Tools:', tools.length);
+      console.log('📝 Instructions length:', instructions.length, 'chars');
       dataChannel.send(JSON.stringify(sessionUpdate));
     };
 
@@ -2500,21 +2491,38 @@ async function handleFileUpload(event) {
             name: file.name
           });
 
-          // Send to AI for analysis
-          if (dataChannel && dataChannel.readyState === 'open') {
-            const event = {
-              type: 'conversation.item.create',
-              item: {
-                type: 'message',
-                role: 'user',
-                content: [
-                  { type: 'input_text', text: `Please analyze this image (${file.name}).` },
-                  { type: 'input_image', image: base64 }
-                ]
-              }
-            };
-            dataChannel.send(JSON.stringify(event));
-            dataChannel.send(JSON.stringify({ type: 'response.create' }));
+          // Analyze image using GPT-4 Vision API (Realtime API doesn't support images)
+          try {
+            showTypingIndicator();
+
+            const serverUrl = els.serverUrl.value.trim();
+            // Use existing vision endpoint with proper data URL format
+            const response = await fetch(`${serverUrl}/api/vision`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                image: content, // Send full data URL (data:image/...;base64,...)
+                prompt: `You are Atlas, Mo's friendly AI assistant. Analyze this image (${file.name}) in detail. Be specific about what you see, including colors, objects, text, layout, and any notable features. Respond conversationally as Atlas would.`
+              })
+            });
+
+            const result = await response.json();
+            removeTypingIndicator();
+
+            if (result.success && result.description) {
+              addMessage('assistant', result.description);
+              // Save to conversation history
+              saveConversationToDB('user', `[Uploaded image: ${file.name}]`);
+              saveConversationToDB('assistant', result.description);
+              // Extract and save memory if relevant
+              extractAndSaveMemory(`[Uploaded image: ${file.name}]`, result.description);
+            } else {
+              addMessage('assistant', `I can see the image "${file.name}", but I had trouble analyzing it. ${result.error || 'Please try again.'}`);
+            }
+          } catch (error) {
+            console.error('Image analysis error:', error);
+            removeTypingIndicator();
+            addMessage('assistant', `I received the image "${file.name}", but I'm having trouble analyzing it right now. Make sure the server is running at ${els.serverUrl.value.trim()}`);
           }
         }
         // For documents (text-based files)
