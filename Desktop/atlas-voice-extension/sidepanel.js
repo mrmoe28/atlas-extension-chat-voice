@@ -164,7 +164,11 @@ const els = {
   memoryEnabled: document.getElementById('memoryEnabled'),
   specialInstructions: document.getElementById('specialInstructions'),
   viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
-  clearMemoryBtn: document.getElementById('clearMemoryBtn')
+  clearMemoryBtn: document.getElementById('clearMemoryBtn'),
+  textInput: document.getElementById('textInput'),
+  textSendBtn: document.getElementById('textSendBtn'),
+  fileUploadBtn: document.getElementById('fileUploadBtn'),
+  fileInput: document.getElementById('fileInput')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -1528,6 +1532,9 @@ IMPORTANT:
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
     els.voiceBtn.disabled = false;
+    els.textInput.disabled = false;
+    els.textSendBtn.disabled = false;
+    els.fileUploadBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
   } catch (err) {
@@ -1666,6 +1673,123 @@ function setupContinuousMode() {
       enableMic();
     }
   });
+}
+
+// ===== 💬 TEXT INPUT HANDLERS =====
+
+// Text input - send on Enter
+els.textInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendTextMessage();
+  }
+});
+
+// Send button click
+els.textSendBtn.addEventListener('click', () => {
+  sendTextMessage();
+});
+
+// File upload button
+els.fileUploadBtn.addEventListener('click', () => {
+  els.fileInput.click();
+});
+
+// File input change
+els.fileInput.addEventListener('change', handleFileUpload);
+
+// Send text message function
+async function sendTextMessage() {
+  const text = els.textInput.value.trim();
+  if (!text || !connected) return;
+
+  // Add user message to chat
+  addMessage('user', text);
+  els.textInput.value = '';
+
+  // 🧠 ADVANCED MEMORY: Proactive recall & pattern tracking
+  if (memoryEnabled) {
+    // Track this interaction for pattern recognition
+    PatternRecognition.track('message_type', 'text');
+
+    // Check if we should proactively recall memories
+    if (ProactiveRecall.shouldRecall(text)) {
+      try {
+        const cached = MemoryCache.load();
+        if (cached && cached.length > 0) {
+          const contextualMemories = await ProactiveRecall.getContextualMemories(text, cached);
+          if (contextualMemories.length > 0) {
+            console.log('🎯 Proactively loaded', contextualMemories.length, 'relevant memories');
+          }
+        }
+      } catch (error) {
+        console.error('Proactive recall error:', error);
+      }
+    }
+  }
+
+  // Send to AI via data channel
+  if (dataChannel && dataChannel.readyState === 'open') {
+    const event = {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text }]
+      }
+    };
+    dataChannel.send(JSON.stringify(event));
+    dataChannel.send(JSON.stringify({ type: 'response.create' }));
+  }
+}
+
+// File upload handler
+async function handleFileUpload(event) {
+  const files = Array.from(event.target.files);
+  if (files.length === 0) return;
+
+  for (const file of files) {
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const content = e.target.result;
+
+        // For images
+        if (file.type.startsWith('image/')) {
+          const base64 = content.split(',')[1];
+          addMessage('user', `📷 Uploaded image: ${file.name}`);
+
+          if (dataChannel && dataChannel.readyState === 'open') {
+            const event = {
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: `Please analyze this image (${file.name}).` },
+                  { type: 'input_image', image: base64 }
+                ]
+              }
+            };
+            dataChannel.send(JSON.stringify(event));
+            dataChannel.send(JSON.stringify({ type: 'response.create' }));
+          }
+        }
+      };
+
+      if (file.type.startsWith('image/')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      addMessage('system', `Error uploading ${file.name}: ${error.message}`);
+    }
+  }
+
+  // Clear file input
+  els.fileInput.value = '';
 }
 
 // Mode switching
