@@ -20,15 +20,18 @@ jobs:
         node-version: '18'
         
     - name: Install dependencies
+      working-directory: Desktop/atlas-voice-extension
       run: npm ci
-      
+
     - name: Build extension
+      working-directory: Desktop/atlas-voice-extension
       run: npm run build:zip
-      
+
     - name: Get version from manifest
+      working-directory: Desktop/atlas-voice-extension
       id: version
       run: |
-        VERSION=$(node -p "require('./extension/manifest.json').version")
+        VERSION=$(node -p "require('./manifest.json').version")
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         
     - name: Create Release
@@ -83,6 +86,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./atlas-voice-extension.zip
+        asset_path: Desktop/atlas-voice-extension/atlas-voice-extension.zip
         asset_name: atlas-voice-extension.zip
         asset_content_type: application/zip
