@@ -5,14 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Atlas Voice</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- PDF.js library for PDF text extraction -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    // Configure PDF.js worker
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
 </head>
 <body>
   <div id="mic-permission-banner" style="display:none; position:sticky; top:0; z-index:9999; padding:10px 12px; background:#fff7e6; border-bottom:1px solid #ffd39c; font-family:system-ui, sans-serif;">
