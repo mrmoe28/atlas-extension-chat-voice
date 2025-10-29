@@ -181,6 +181,8 @@ let isVisionMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
+let memoryContext = ''; // Loaded memories for AI context
+let sessionId = Date.now().toString(); // Unique session ID for conversation tracking
 
 // Settings Modal Management
 let isModalOpen = false;
@@ -524,6 +526,141 @@ function showTypingIndicator() {
 function removeTypingIndicator() {
   const indicator = document.querySelector('.message:has(.typing-indicator)');
   if (indicator) indicator.remove();
+}
+
+// ===== 🧠 MEMORY SYSTEM INTEGRATION =====
+
+async function loadMemories() {
+  if (!els.memoryEnabled.checked) {
+    console.log('💾 Memory disabled by user');
+    memoryContext = '';
+    return '';
+  }
+
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) {
+      console.log('⚠️ No server URL configured');
+      return '';
+    }
+
+    console.log('🧠 Loading memories from database...');
+    const response = await fetch(`${serverUrl}/api/knowledge`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to load memories:', response.status);
+      return '';
+    }
+
+    const data = await response.json();
+
+    // Format memories for AI context
+    let context = '\n\n🧠 LONG-TERM MEMORY CONTEXT:\n\n';
+
+    if (data.memory && data.memory.length > 0) {
+      context += '**Important Facts & Preferences:**\n';
+      data.memory.slice(0, 10).forEach(m => {
+        context += `- [${m.memory_type}] ${m.content} (importance: ${m.importance_score}/10)\n`;
+      });
+      context += '\n';
+    }
+
+    if (data.patterns && data.patterns.length > 0) {
+      context += '**Learned Patterns:**\n';
+      data.patterns.slice(0, 5).forEach(p => {
+        context += `- ${p.pattern_type}: ${JSON.stringify(p.pattern_data)}\n`;
+      });
+      context += '\n';
+    }
+
+    if (data.knowledge && data.knowledge.length > 0) {
+      context += '**Knowledge Base:**\n';
+      data.knowledge.slice(0, 10).forEach(k => {
+        context += `- [${k.category}] ${k.title}: ${k.content}\n`;
+      });
+    }
+
+    memoryContext = context;
+    console.log('✅ Loaded memory context:', context.length, 'chars');
+    return context;
+  } catch (error) {
+    console.error('Error loading memories:', error);
+    return '';
+  }
+}
+
+async function saveConversationToDB(role, content) {
+  if (!els.memoryEnabled.checked) return;
+
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) return;
+
+    await fetch(`${serverUrl}/api/conversation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: 'default',
+        session_id: sessionId,
+        role: role,
+        content: content,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          desktop_mode: isDesktopMode,
+          vision_mode: isVisionMode
+        }
+      })
+    });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+  }
+}
+
+async function extractAndSaveMemory(userMessage, aiResponse) {
+  if (!els.memoryEnabled.checked) return;
+
+  // Check if user is asking Atlas to remember something
+  const rememberKeywords = ['remember', 'save this', 'keep in mind', 'don\'t forget', 'my name is', 'i prefer', 'i like'];
+  const shouldRemember = rememberKeywords.some(keyword => userMessage.toLowerCase().includes(keyword));
+
+  if (shouldRemember) {
+    try {
+      const serverUrl = els.serverUrl.value.trim();
+      if (!serverUrl) return;
+
+      // Determine memory type
+      let memoryType = 'fact';
+      if (userMessage.toLowerCase().includes('prefer') || userMessage.toLowerCase().includes('like')) {
+        memoryType = 'preference';
+      } else if (userMessage.toLowerCase().includes('my name is')) {
+        memoryType = 'personal';
+      }
+
+      // Extract the content to remember
+      let content = userMessage;
+      if (aiResponse) {
+        content = `User said: "${userMessage}". Context: ${aiResponse.substring(0, 200)}`;
+      }
+
+      await fetch(`${serverUrl}/api/knowledge/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: 'default',
+          memory_type: memoryType,
+          content: content,
+          importance_score: 7
+        })
+      });
+
+      console.log('💾 Saved memory:', memoryType, content.substring(0, 50));
+    } catch (error) {
+      console.error('Error saving memory:', error);
+    }
+  }
 }
 
 async function connectRealtime() {
