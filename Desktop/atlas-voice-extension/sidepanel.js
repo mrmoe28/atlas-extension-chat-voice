@@ -1343,7 +1343,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
       const sessionUpdate = {
         type: 'session.update',
         session: {
-          instructions: isDesktopMode
+          instructions: (isDesktopMode
             ? `You are Atlas Voice, a helpful desktop assistant. Be conversational and natural.
 
 IMPORTANT:
@@ -1353,7 +1353,7 @@ IMPORTANT:
 - Be friendly and helpful, not robotic
 - Keep responses concise but complete
 - Never show function syntax to users`
-            : `You are Atlas Voice, a helpful AI assistant. Be conversational and concise.`,
+            : `You are Atlas Voice, a helpful AI assistant. Be conversational and concise.`) + memoryContext,
           voice: 'alloy',
           tools: tools,
           tool_choice: 'auto',
