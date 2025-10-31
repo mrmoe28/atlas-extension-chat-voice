@@ -1208,17 +1208,31 @@ IMPORTANT: You CAN see and analyze images and documents uploaded by the user!
 - The user will see a preview of the document in the chat
 - You receive the full document content
 - You CAN read, analyze, summarize, review, and answer questions about the document
+- **IMPORTANT: ALWAYS SUMMARIZE unless user specifically asks for full text**
 - Provide specific insights about the document content
 
+**SUMMARIZATION RULES:**
+When user says "Can you summarize this?" or uploads without specific instructions:
+1. **Brief Summary** (2-3 sentences): Main purpose and key points
+2. **Key Sections** (bullet points): Major topics or sections
+3. **Important Details**: Dates, names, numbers, requirements
+4. **Action Items**: Any tasks, deadlines, or next steps mentioned
+5. **Ask**: "Would you like me to elaborate on any specific section?"
+
+**When to Read Full Text:**
+- User explicitly asks: "read the whole thing", "what does it say word for word"
+- User asks about a specific section: "what does section 3 say?"
+- Short documents (under 200 words)
+
 **Examples:**
-User uploads an image:
-You: "I can see this is a screenshot showing a web page with a navigation bar at the top. The page appears to be..."
+User: "Can you summarize this for me?"
+You: "Sure! This is a Subcontractor Agreement between EPC Solar and a subcontractor. Key points: 1) Independent contractor relationship, 2) Insurance requirements (workers' comp, liability), 3) Payment within 5 days of inspection, 4) Term until Dec 31, 2026, 5) Governed by Florida law. Would you like me to elaborate on any section?"
 
-User uploads a .txt file:
-You: "I've read through the document. Here's what I found: The document contains..."
+User uploads a .txt file without asking:
+You: "I've reviewed the document. It's a [type] covering [main topics]. Key points: [3-4 bullet points]. Anything specific you'd like to know more about?"
 
-User uploads a .json file:
-You: "Looking at this JSON file, I can see it has the following structure..."
+User: "Read the whole contract word for word"
+You: [Then read full text]
 
 NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
 
@@ -1562,17 +1576,31 @@ IMPORTANT: You CAN see and analyze images and documents uploaded by the user!
 - The user will see a preview of the document in the chat
 - You receive the full document content
 - You CAN read, analyze, summarize, review, and answer questions about the document
+- **IMPORTANT: ALWAYS SUMMARIZE unless user specifically asks for full text**
 - Provide specific insights about the document content
 
+**SUMMARIZATION RULES:**
+When user says "Can you summarize this?" or uploads without specific instructions:
+1. **Brief Summary** (2-3 sentences): Main purpose and key points
+2. **Key Sections** (bullet points): Major topics or sections
+3. **Important Details**: Dates, names, numbers, requirements
+4. **Action Items**: Any tasks, deadlines, or next steps mentioned
+5. **Ask**: "Would you like me to elaborate on any specific section?"
+
+**When to Read Full Text:**
+- User explicitly asks: "read the whole thing", "what does it say word for word"
+- User asks about a specific section: "what does section 3 say?"
+- Short documents (under 200 words)
+
 **Examples:**
-User uploads an image:
-You: "I can see this is a screenshot showing a web page with a navigation bar at the top. The page appears to be..."
+User: "Can you summarize this for me?"
+You: "Sure! This is a Subcontractor Agreement between EPC Solar and a subcontractor. Key points: 1) Independent contractor relationship, 2) Insurance requirements (workers' comp, liability), 3) Payment within 5 days of inspection, 4) Term until Dec 31, 2026, 5) Governed by Florida law. Would you like me to elaborate on any section?"
 
-User uploads a .txt file:
-You: "I've read through the document. Here's what I found: The document contains..."
+User uploads a .txt file without asking:
+You: "I've reviewed the document. It's a [type] covering [main topics]. Key points: [3-4 bullet points]. Anything specific you'd like to know more about?"
 
-User uploads a .json file:
-You: "Looking at this JSON file, I can see it has the following structure..."
+User: "Read the whole contract word for word"
+You: [Then read full text]
 
 NEVER say "I can't see" or "I'm unable to view" uploaded files - YOU CAN! The user has uploaded it for you to analyze.
 
@@ -4625,13 +4653,23 @@ async function executeDesktopCommand(command) {
 }
 
 // Execute browser automation commands via content script
-async function executeBrowserCommand(action, params) {
+async function executeBrowserCommand(action, params, retryCount = 0) {
   try {
     // Get the current active tab
     const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
+
     if (!currentTab) {
       return { error: 'No active tab found' };
+    }
+
+    // Check if URL is allowed for content scripts
+    if (!currentTab.url ||
+        currentTab.url.startsWith('chrome://') ||
+        currentTab.url.startsWith('chrome-extension://') ||
+        currentTab.url.startsWith('about:') ||
+        currentTab.url.startsWith('edge://') ||
+        currentTab.url === 'about:blank') {
+      return { error: 'Cannot interact with special browser pages. Please navigate to a regular website.' };
     }
 
     // Send message to content script
@@ -4643,6 +4681,33 @@ async function executeBrowserCommand(action, params) {
     return response;
   } catch (error) {
     console.error('Browser command error:', error);
+
+    // Handle "Receiving end does not exist" error
+    if (error.message && error.message.includes('Receiving end does not exist')) {
+      // Content script not loaded yet - try to inject it
+      if (retryCount < 2) {
+        try {
+          const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+          // Try to inject content script
+          await chrome.scripting.executeScript({
+            target: { tabId: currentTab.id },
+            files: ['content.js']
+          });
+
+          // Wait a bit for script to initialize
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Retry the command
+          console.log('🔄 Retrying command after injecting content script...');
+          return await executeBrowserCommand(action, params, retryCount + 1);
+        } catch (injectError) {
+          return { error: 'Could not load automation script. Try refreshing the page.' };
+        }
+      }
+      return { error: 'Automation script not responding. Please refresh the page and try again.' };
+    }
+
     return { error: error.message };
   }
 }
