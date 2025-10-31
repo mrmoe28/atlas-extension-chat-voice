@@ -1121,6 +1121,7 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
       const sessionUpdate = {
         type: 'session.update',
         session: {
+          modalities: ['text', 'audio'], // Enable both text and audio responses
           instructions: isDesktopMode
             ? `You are Atlas Voice, a helpful desktop assistant. Be conversational and natural.
 
@@ -1382,7 +1383,12 @@ IMPORTANT:
           currentAIMessage += msg.delta || '';
         }
 
-        if (msg.type === 'response.text.done' || msg.type === 'response.done') {
+        // Handle AI audio transcript (for voice responses)
+        if (msg.type === 'response.audio_transcript.delta') {
+          currentAIMessage += msg.delta || '';
+        }
+
+        if (msg.type === 'response.text.done' || msg.type === 'response.audio_transcript.done' || msg.type === 'response.done') {
           if (currentAIMessage) {
             removeTypingIndicator();
             addMessage('assistant', currentAIMessage);
