@@ -314,6 +314,13 @@ function initBrowserSpeech() {
 async function sendToGroq(message) {
   try {
     console.log('📤 Sending to Groq:', message);
+
+    // Get server URL from settings
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) {
+      throw new Error('Server URL not configured. Please set it in Settings.');
+    }
+
     els.voiceStatus.textContent = 'Thinking...';
     isSpeaking = true;
     updateOrbState();
