@@ -2,6 +2,10 @@
  * Atlas Voice - Minimal Interface with Hamburger Menu
  */
 
+// Import Groq and Web Speech handlers
+import { groqConnector } from './lib/groq-connector.js';
+import { webSpeechHandler } from './lib/web-speech-handler.js';
+
 // ===== Mic Permission + Stream Manager =====================================
 const MicPermission = (() => {
   let inFlight = false;
@@ -164,7 +168,9 @@ const els = {
   memoryEnabled: document.getElementById('memoryEnabled'),
   specialInstructions: document.getElementById('specialInstructions'),
   viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
-  clearMemoryBtn: document.getElementById('clearMemoryBtn')
+  clearMemoryBtn: document.getElementById('clearMemoryBtn'),
+  aiProvider: document.getElementById('aiProvider'),
+  apiKey: document.getElementById('apiKey')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -176,6 +182,10 @@ let isVisionMode = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
+
+// AI Provider state
+let currentAIProvider = 'groq'; // Default to free Groq
+let groqApiKey = null;
 
 // Settings Modal Management
 let isModalOpen = false;
@@ -521,6 +531,115 @@ function showTypingIndicator() {
 function removeTypingIndicator() {
   const indicator = document.querySelector('.message:has(.typing-indicator)');
   if (indicator) indicator.remove();
+}
+
+// ===== Groq + Web Speech Connection =====
+async function connectGroq() {
+  try {
+    console.log('🚀 Starting Groq connection...');
+
+    // Get API key from settings or use default free tier
+    groqApiKey = els.apiKey.value.trim();
+
+    if (!groqApiKey) {
+      els.orbStatus.textContent = 'Please enter Groq API key in settings';
+      throw new Error('Groq API key required. Get free key at https://console.groq.com');
+    }
+
+    // Initialize Groq connector
+    await groqConnector.initialize(groqApiKey);
+
+    // Initialize Web Speech API
+    webSpeechHandler.initialize();
+
+    // Set up speech recognition callbacks
+    webSpeechHandler.onResult((transcript, isFinal) => {
+      if (isFinal) {
+        currentUserMessage = transcript;
+        addMessage('user', transcript);
+
+        // Send to Groq and get response
+        handleGroqConversation(transcript);
+      }
+    });
+
+    webSpeechHandler.onError((error) => {
+      console.error('🎤 Speech error:', error);
+      els.orbStatus.textContent = `Speech error: ${error}`;
+    });
+
+    webSpeechHandler.onStart(() => {
+      isListening = true;
+      updateOrbState();
+    });
+
+    webSpeechHandler.onEnd(() => {
+      isListening = false;
+      updateOrbState();
+    });
+
+    // Mark as connected
+    connected = true;
+    els.orbStatus.textContent = 'Ready - Hold button to talk (Groq Mode)';
+    els.statusDot.classList.add('connected');
+    els.interruptBtn.disabled = false;
+    els.voiceBtn.disabled = false;
+    els.connectBtn.textContent = 'Disconnect';
+    els.connectBtn.classList.add('connected');
+
+    console.log('✅ Groq connection established');
+
+  } catch (err) {
+    console.error('❌ Groq connection error:', err);
+    els.orbStatus.textContent = `Error: ${err.message}`;
+    connected = false;
+  }
+}
+
+// Handle Groq conversation
+async function handleGroqConversation(userMessage) {
+  try {
+    showTypingIndicator();
+    isSpeaking = true;
+    updateOrbState();
+
+    // Get response from Groq (streaming)
+    let fullResponse = '';
+
+    const result = await groqConnector.streamMessage(
+      userMessage,
+      (chunk) => {
+        // Handle streaming chunks (could update UI in real-time)
+        fullResponse += chunk;
+      },
+      async (completeMessage) => {
+        // Message complete
+        removeTypingIndicator();
+        addMessage('assistant', completeMessage);
+
+        // Speak the response using browser TTS
+        try {
+          await webSpeechHandler.speak(completeMessage);
+        } catch (speechError) {
+          console.error('TTS error:', speechError);
+        }
+
+        isSpeaking = false;
+        updateOrbState();
+      }
+    );
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+  } catch (error) {
+    console.error('❌ Groq conversation error:', error);
+    removeTypingIndicator();
+    addMessage('assistant', `Error: ${error.message}`);
+    isSpeaking = false;
+    updateOrbState();
+  }
 }
 
 async function connectRealtime() {
@@ -1441,6 +1560,14 @@ IMPORTANT:
 }
 
 function teardown() {
+  // Stop Groq/Web Speech if active
+  if (currentAIProvider === 'groq') {
+    webSpeechHandler.stopListening();
+    webSpeechHandler.stopSpeaking();
+    groqConnector.clearHistory();
+  }
+
+  // Stop OpenAI Realtime
   if (dataChannel) dataChannel.close();
   if (pc) pc.close();
   if (micStream) {
@@ -1508,23 +1635,34 @@ function setupPressToTalk() {
   // Hold to talk functionality
   els.voiceBtn.addEventListener('mousedown', (e) => {
     if (!connected || isContinuousMode) return;
-    
+
     isHolding = true;
     // Clear any pending click timeout
     if (clickTimeout) {
       clearTimeout(clickTimeout);
       clickTimeout = null;
     }
-    
-    enableMic();
+
+    // Use appropriate voice handler based on AI provider
+    if (currentAIProvider === 'groq') {
+      webSpeechHandler.startListening();
+    } else {
+      enableMic();
+    }
   });
 
   ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => {
     els.voiceBtn.addEventListener(evt, () => {
       if (!connected || isContinuousMode) return;
-      
+
       isHolding = false;
-      disableMic();
+
+      // Use appropriate voice handler based on AI provider
+      if (currentAIProvider === 'groq') {
+        webSpeechHandler.stopListening();
+      } else {
+        disableMic();
+      }
     });
   });
 
@@ -2175,7 +2313,17 @@ if (els.connectBtn) {
     try {
       if (!connected) {
         console.log('🚀 Starting connection...');
-        await connectRealtime();
+
+        // Check which AI provider is selected
+        currentAIProvider = els.aiProvider.value;
+        console.log('🤖 Selected AI provider:', currentAIProvider);
+
+        if (currentAIProvider === 'groq') {
+          await connectGroq();
+        } else {
+          await connectRealtime();
+        }
+
         // Close settings modal after connecting
         closeSettingsModal();
       } else {
