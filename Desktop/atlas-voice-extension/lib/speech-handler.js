@@ -185,39 +185,59 @@ export class SpeechHandler {
         console.log('ℹ️ Speech synthesis not available');
         this.state.isSpeaking = false;
         this.updateOrbState();
+        this.els.voiceStatus.textContent = 'TTS not available';
         return;
       }
 
-      // Cancel any ongoing speech
-      browserSynthesis.cancel();
+      try {
+        // Cancel any ongoing speech
+        browserSynthesis.cancel();
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
 
-      utterance.onstart = () => {
-        console.log('🔊 Speaking with browser voice...');
-        this.state.isSpeaking = true;
-        this.updateOrbState();
-        this.els.voiceStatus.textContent = 'Speaking...';
-      };
+        utterance.onstart = () => {
+          console.log('🔊 Speaking with browser voice...');
+          this.state.isSpeaking = true;
+          this.updateOrbState();
+          this.els.voiceStatus.textContent = 'Speaking...';
+        };
 
-      utterance.onend = () => {
-        console.log('✅ Speech complete');
+        utterance.onend = () => {
+          console.log('✅ Speech complete');
+          this.state.isSpeaking = false;
+          this.updateOrbState();
+          this.els.voiceStatus.textContent = this.state.connected ? 'Hold to talk' : 'Disconnected';
+        };
+
+        utterance.onerror = (event) => {
+          console.error('❌ Speech synthesis error:', event.error);
+          this.state.isSpeaking = false;
+          this.updateOrbState();
+          this.els.voiceStatus.textContent = 'TTS error';
+        };
+
+        browserSynthesis.speak(utterance);
+
+        // Check if speech actually started (some browsers silently fail)
+        setTimeout(() => {
+          if (!browserSynthesis.speaking && !browserSynthesis.pending) {
+            console.log('ℹ️ Browser TTS failed to start');
+            this.state.isSpeaking = false;
+            this.updateOrbState();
+            this.els.voiceStatus.textContent = 'TTS failed to start';
+          }
+        }, 100);
+
+      } catch (error) {
+        console.error('❌ Browser TTS error:', error);
         this.state.isSpeaking = false;
         this.updateOrbState();
-        this.els.voiceStatus.textContent = this.state.connected ? 'Hold to talk' : 'Disconnected';
-      };
-
-      utterance.onerror = (event) => {
-        console.log('ℹ️ Speech synthesis error:', event.error);
-        this.state.isSpeaking = false;
-        this.updateOrbState();
-      };
-
-      browserSynthesis.speak(utterance);
+        this.els.voiceStatus.textContent = 'TTS error';
+      }
     }
   }
 
@@ -286,7 +306,33 @@ export class SpeechHandler {
         URL.revokeObjectURL(audioUrl);
       };
 
-      await audio.play();
+      // Play audio with proper error handling for autoplay blocking
+      try {
+        await audio.play();
+      } catch (error) {
+        console.error('❌ Audio play() failed:', error);
+
+        // Check if it's an autoplay blocking issue
+        if (error.name === 'NotAllowedError') {
+          console.log('ℹ️ Audio autoplay blocked by browser. User interaction required.');
+          this.els.voiceStatus.textContent = 'Click to enable audio';
+
+          // Add one-time click listener to retry playback
+          const retryPlayback = async () => {
+            try {
+              await audio.play();
+              document.removeEventListener('click', retryPlayback);
+            } catch (retryError) {
+              console.error('❌ Audio retry failed:', retryError);
+            }
+          };
+          document.addEventListener('click', retryPlayback, { once: true });
+        }
+
+        this.state.isSpeaking = false;
+        this.updateOrbState();
+        URL.revokeObjectURL(audioUrl);
+      }
 
     } catch (error) {
       // Log error silently without showing to user
