@@ -40,6 +40,27 @@ CREATE TABLE IF NOT EXISTS atlas_conversations (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Piper TTS Voices Table
+CREATE TABLE IF NOT EXISTS piper_voices (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE, -- 'lessac', 'ryan', etc.
+  display_name VARCHAR(255) NOT NULL,
+  model_file VARCHAR(255) NOT NULL,
+  language VARCHAR(20) NOT NULL DEFAULT 'en_US',
+  gender VARCHAR(20), -- 'male', 'female'
+  quality VARCHAR(20), -- 'low', 'medium', 'high'
+  file_size_mb INTEGER,
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  local_path TEXT, -- Path on server filesystem
+  sample_text TEXT DEFAULT 'Hello! I am Atlas, your voice assistant.',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_piper_voices_active ON piper_voices(is_active);
+CREATE INDEX IF NOT EXISTS idx_piper_voices_quality ON piper_voices(quality);
+
 -- Atlas Learned Patterns Table
 CREATE TABLE IF NOT EXISTS atlas_patterns (
   id SERIAL PRIMARY KEY,

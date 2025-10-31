@@ -3,6 +3,9 @@ import express from 'express';
 import fetch from 'node-fetch';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import {
   initializeDatabase,
   saveMemory,
@@ -13,12 +16,17 @@ import {
   savePattern,
   getKnowledge,
   saveKnowledge,
-  clearAllMemory
+  clearAllMemory,
+  getDb
 } from './database.js';
 
 const execAsync = promisify(exec);
 const app = express();
 const PORT = process.env.PORT || 8787;
+
+// Get __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize database on startup
 initializeDatabase().then(result => {
@@ -709,6 +717,144 @@ app.get('/api/updates/check', async (req, res) => {
       error: 'Failed to check for updates',
       message: error.message,
       hasUpdate: false
+    });
+  }
+});
+
+// ============================================
+// Piper TTS Endpoints
+// ============================================
+
+// GET /api/piper/voices - List available Piper voices from database
+app.get('/api/piper/voices', async (req, res) => {
+  try {
+    const sql = getDb();
+    if (!sql) {
+      return res.status(503).json({
+        error: 'Database not configured',
+        message: 'Piper voices require database connection'
+      });
+    }
+
+    const voices = await sql`
+      SELECT id, name, display_name, language, gender, quality,
+             file_size_mb, description, is_active, sample_text
+      FROM piper_voices
+      WHERE is_active = true
+      ORDER BY quality DESC, name
+    `;
+
+    res.json({
+      success: true,
+      count: voices.length,
+      voices: voices
+    });
+
+  } catch (error) {
+    console.error('Error fetching Piper voices:', error);
+    res.status(500).json({
+      error: 'Failed to fetch Piper voices',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/piper/tts - Generate audio using Piper TTS (local only)
+app.post('/api/piper/tts', async (req, res) => {
+  try {
+    const { text, voice } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    if (!voice) {
+      return res.status(400).json({ error: 'Voice name is required' });
+    }
+
+    // Get voice details from database
+    const sql = getDb();
+    if (!sql) {
+      return res.status(503).json({
+        error: 'Database not configured',
+        message: 'Piper TTS requires database connection'
+      });
+    }
+
+    const voiceResults = await sql`
+      SELECT local_path, model_file, display_name
+      FROM piper_voices
+      WHERE name = ${voice} AND is_active = true
+    `;
+
+    if (voiceResults.length === 0) {
+      return res.status(404).json({
+        error: 'Voice not found',
+        message: `Voice '${voice}' not found or inactive`
+      });
+    }
+
+    const voiceData = voiceResults[0];
+    const modelPath = voiceData.local_path;
+
+    // Check if model file exists
+    if (!fs.existsSync(modelPath)) {
+      return res.status(404).json({
+        error: 'Voice model file not found',
+        message: `Model file not found at: ${modelPath}`,
+        help: 'Piper voices must be downloaded locally. This endpoint only works with local server.'
+      });
+    }
+
+    // Generate unique filename for this request
+    const outputDir = path.join(__dirname, '../../piper-tts/voices/temp');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const outputFile = path.join(outputDir, `tts_${voice}_${timestamp}.wav`);
+
+    // Generate audio using Piper TTS
+    // Use the virtual environment's Python
+    const piperVenvPath = path.join(__dirname, '../../piper-tts/venv/bin/python');
+    const command = `echo "${text.replace(/"/g, '\\"')}" | ${piperVenvPath} -m piper --model "${modelPath}" --output-file "${outputFile}"`;
+
+    console.log(`🎤 Generating TTS for voice: ${voice}`);
+    console.log(`📝 Text: ${text.substring(0, 50)}...`);
+
+    await execAsync(command);
+
+    // Check if file was created
+    if (!fs.existsSync(outputFile)) {
+      throw new Error('Audio file was not generated');
+    }
+
+    // Read the audio file
+    const audioBuffer = fs.readFileSync(outputFile);
+
+    // Delete temp file after reading
+    fs.unlinkSync(outputFile);
+
+    // Send audio as base64
+    const audioBase64 = audioBuffer.toString('base64');
+
+    console.log(`✅ TTS generated: ${audioBuffer.length} bytes`);
+
+    res.json({
+      success: true,
+      voice: voiceData.display_name,
+      audio: audioBase64,
+      format: 'wav',
+      size: audioBuffer.length
+    });
+
+  } catch (error) {
+    console.error('❌ Piper TTS error:', error);
+    res.status(500).json({
+      error: 'Failed to generate TTS audio',
+      message: error.message,
+      help: 'This endpoint requires local Piper TTS installation. Run server locally with: cd dev/server && npm run dev'
     });
   }
 });
