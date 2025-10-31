@@ -5708,9 +5708,16 @@ function loadSettings() {
     console.log('✅ Temperature restored:', savedTemperature);
   }
 
-  if (savedMemoryEnabled === 'true') {
+  // Enable memory by default for new users, or restore saved setting
+  if (savedMemoryEnabled === null || savedMemoryEnabled === undefined) {
+    els.memoryEnabled.checked = true; // Default: enabled
+    console.log('✅ Memory enabled by default');
+  } else if (savedMemoryEnabled === 'true') {
     els.memoryEnabled.checked = true;
     console.log('✅ Memory enabled restored');
+  } else {
+    els.memoryEnabled.checked = false;
+    console.log('Memory disabled (user preference)');
   }
 
   if (savedSpecialInstructions) {
@@ -6103,46 +6110,39 @@ function loadVoices() {
   defaultOption.textContent = 'Default Voice';
   els.voiceSelect.appendChild(defaultOption);
 
-  // Filter for high-quality US English voices only
-  const highQualityVoices = [
-    'Alex',           // macOS - Most natural male voice
-    'Samantha',       // macOS - Clear, soothing female voice
-    'Karen',          // macOS - Alternative female voice
-    'Google US English',  // Google voice (if available)
-    'Microsoft David',    // Windows high-quality male
-    'Microsoft Zira',     // Windows high-quality female
-    'Chrome OS US English 1',
-    'Chrome OS US English 2',
-    'Chrome OS US English 3'
+  // Premium US English voices only (excluding novelty voices)
+  const premiumVoices = ['Alex', 'Samantha', 'Karen', 'Victoria', 'Allison', 'Susan', 'Tom'];
+  const googleVoices = ['Google US English'];
+  const microsoftVoices = ['Microsoft David', 'Microsoft Zira', 'Microsoft Mark'];
+
+  // Novelty/effect voices to exclude
+  const excludedVoices = [
+    'Bad News', 'Bahh', 'Bells', 'Boing', 'Bubbles', 'Cellos', 'Deranged',
+    'Good News', 'Hysterical', 'Junior', 'Pipe Organ', 'Ralph', 'Trinoids',
+    'Whisper', 'Wobble', 'Zarvox', 'Albert', 'Fred', 'Bruce', 'Agnes', 'Kathy', 'Princess', 'Vicki'
   ];
 
-  // Add each high-quality US English voice
+  // Add only high-quality voices
   voices.forEach((voice, index) => {
-    // Only include en-US voices that are in our high-quality list
     if (voice.lang === 'en-US' || voice.lang === 'en_US') {
-      // Check if voice name matches any high-quality voice
-      const isHighQuality = highQualityVoices.some(hq => voice.name.includes(hq));
+      // Check if it's a premium voice
+      const isPremium = premiumVoices.some(pv => voice.name === pv || voice.name.startsWith(pv + ' ('));
+      const isGoogle = googleVoices.some(gv => voice.name.includes(gv));
+      const isMicrosoft = microsoftVoices.some(mv => voice.name.includes(mv));
+      const isExcluded = excludedVoices.some(ev => voice.name === ev || voice.name.startsWith(ev + ' ('));
 
-      if (isHighQuality) {
-        const option = document.createElement('option');
-        option.value = voice.name;
-        option.textContent = voice.name; // Simplified display
-        els.voiceSelect.appendChild(option);
-      }
-    }
-  });
-
-  // If no voices found, show all en-US voices as fallback
-  if (els.voiceSelect.options.length === 1) {
-    console.log('⚠️ No high-quality voices found, showing all en-US voices');
-    voices.forEach((voice, index) => {
-      if (voice.lang === 'en-US' || voice.lang === 'en_US') {
+      if ((isPremium || isGoogle || isMicrosoft) && !isExcluded) {
         const option = document.createElement('option');
         option.value = voice.name;
         option.textContent = voice.name;
         els.voiceSelect.appendChild(option);
       }
-    });
+    }
+  });
+
+  // If still no voices (shouldn't happen), log warning
+  if (els.voiceSelect.options.length === 1) {
+    console.warn('⚠️ No premium voices found on this system');
   }
 
   // Restore saved voice selection
