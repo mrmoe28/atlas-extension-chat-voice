@@ -975,9 +975,11 @@ async function connectRealtime() {
   try {
     console.log('🚀 Starting connection process...');
     console.log('📡 Server URL:', els.serverUrl.value.trim());
-    
-    if (!els.serverUrl.value.trim()) {
-      throw new Error('Server URL is required. Please enter a server URL in settings.');
+    console.log('🔑 API Key provided:', !!els.apiKey.value.trim());
+
+    // Check if either API key or server URL is provided
+    if (!els.apiKey.value.trim() && !els.serverUrl.value.trim()) {
+      throw new Error('Please provide either an API key or server URL in settings.');
     }
     
     // Clean up any existing connection first
