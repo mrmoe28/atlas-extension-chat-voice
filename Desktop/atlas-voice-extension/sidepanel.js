@@ -399,13 +399,15 @@ function speakText(text) {
   utterance.volume = 1.0;
 
   // Apply selected voice if available
-  const selectedVoiceIndex = els.voiceSelect.value;
-  if (selectedVoiceIndex !== '') {
+  const selectedVoiceName = els.voiceSelect.value;
+  if (selectedVoiceName !== '') {
     const voices = speechSynthesis.getVoices();
-    const selectedVoice = voices[parseInt(selectedVoiceIndex)];
+    const selectedVoice = voices.find(voice => voice.name === selectedVoiceName);
     if (selectedVoice) {
       utterance.voice = selectedVoice;
       console.log('🎤 Using voice:', selectedVoice.name);
+    } else {
+      console.warn('⚠️ Selected voice not found:', selectedVoiceName);
     }
   }
 
@@ -6104,16 +6106,16 @@ function loadVoices() {
   // Add each voice as an option
   voices.forEach((voice, index) => {
     const option = document.createElement('option');
-    option.value = index;
+    option.value = voice.name; // Use voice name instead of index for stability
     option.textContent = `${voice.name} (${voice.lang})`;
     els.voiceSelect.appendChild(option);
   });
 
   // Restore saved voice selection
-  const savedVoice = localStorage.getItem('atlasVoice_selectedVoice');
-  if (savedVoice) {
-    els.voiceSelect.value = savedVoice;
-    console.log('✅ Restored voice selection:', savedVoice);
+  const savedVoiceName = localStorage.getItem('atlasVoice_selectedVoice');
+  if (savedVoiceName) {
+    els.voiceSelect.value = savedVoiceName;
+    console.log('✅ Restored voice selection:', savedVoiceName);
   }
 }
 
@@ -6124,9 +6126,9 @@ if (speechSynthesis.onvoiceschanged !== undefined) {
 
 // Save voice selection when changed
 els.voiceSelect.addEventListener('change', () => {
-  const selectedVoice = els.voiceSelect.value;
-  localStorage.setItem('atlasVoice_selectedVoice', selectedVoice);
-  console.log('💾 Saved voice selection:', selectedVoice);
+  const selectedVoiceName = els.voiceSelect.value;
+  localStorage.setItem('atlasVoice_selectedVoice', selectedVoiceName);
+  console.log('💾 Saved voice selection:', selectedVoiceName);
 });
 
 // Initialize
