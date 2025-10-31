@@ -136,6 +136,7 @@ const els = {
   settingsModal: document.getElementById('settingsModal'),
   settingsBackdrop: document.getElementById('settingsBackdrop'),
   settingsClose: document.getElementById('settingsClose'),
+  apiKey: document.getElementById('apiKey'),
   serverUrl: document.getElementById('serverUrl'),
   connectBtn: document.getElementById('connectBtn'),
   statusDot: document.getElementById('statusDot'),
@@ -345,6 +346,24 @@ window.addEventListener('resize', () => {
 });
 
 async function getEphemeralToken(serverBase) {
+  // Check if user has provided a local API key
+  const localApiKey = els.apiKey.value.trim();
+
+  if (localApiKey) {
+    console.log('🔑 Using local API key');
+    return {
+      client_secret: localApiKey,
+      model: 'gpt-4o-realtime-preview-2024-12-17',
+      endpoint: 'https://api.openai.com/v1/realtime'
+    };
+  }
+
+  // Fall back to server endpoint if no local key
+  if (!serverBase) {
+    throw new Error('Please provide either an API key or server URL');
+  }
+
+  console.log('🔑 Fetching credentials from server');
   const r = await fetch(`${serverBase}/api/ephemeral`);
   if (!r.ok) throw new Error('Failed to get ephemeral key');
   return r.json();
@@ -4400,6 +4419,11 @@ els.visionMode.addEventListener('change', () => {
   saveSettings();
 });
 
+// Save API key when changed
+els.apiKey.addEventListener('change', () => {
+  saveSettings();
+});
+
 // Save server URL when changed
 els.serverUrl.addEventListener('change', () => {
   saveSettings();
@@ -4745,6 +4769,7 @@ els.clearMemoryBtn.addEventListener('click', async () => {
 // Load saved settings from localStorage
 function loadSettings() {
   console.log('💾 Loading saved settings...');
+  const savedApiKey = localStorage.getItem('atlasVoice_apiKey');
   const savedServerUrl = localStorage.getItem('atlasVoice_serverUrl');
   const savedDesktopMode = localStorage.getItem('atlasVoice_desktopMode');
   const savedContinuousMode = localStorage.getItem('atlasVoice_continuousMode');
@@ -4754,7 +4779,11 @@ function loadSettings() {
   const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
   const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedWakeWordMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
+  console.log('Settings:', { hasApiKey: !!savedApiKey, savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedWakeWordMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
+
+  if (savedApiKey) {
+    els.apiKey.value = savedApiKey;
+  }
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -4816,6 +4845,7 @@ function loadSettings() {
 // Save settings to localStorage
 function saveSettings() {
   const settings = {
+    apiKey: els.apiKey.value,
     serverUrl: els.serverUrl.value,
     desktopMode: els.desktopMode.checked,
     continuousMode: els.continuousMode.checked,
@@ -4826,8 +4856,9 @@ function saveSettings() {
     specialInstructions: els.specialInstructions.value
   };
 
-  console.log('💾 Saving settings:', settings);
+  console.log('💾 Saving settings:', { ...settings, apiKey: settings.apiKey ? '[REDACTED]' : '' });
 
+  localStorage.setItem('atlasVoice_apiKey', settings.apiKey);
   localStorage.setItem('atlasVoice_serverUrl', settings.serverUrl);
   localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
   localStorage.setItem('atlasVoice_continuousMode', String(settings.continuousMode));

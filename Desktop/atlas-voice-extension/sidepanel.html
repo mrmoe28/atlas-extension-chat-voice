@@ -70,11 +70,21 @@
         </div>
         <div class="settings-body" tabindex="0">
         <div class="setting-item">
-          <label>Server URL</label>
+          <label>OpenAI API Key</label>
+          <input id="apiKey"
+                 type="password"
+                 placeholder="sk-..."
+                 class="server-input" />
+          <p class="mode-description">Enter your OpenAI API key to connect directly (stored locally)</p>
+        </div>
+
+        <div class="setting-item">
+          <label>Server URL (Optional)</label>
           <input id="serverUrl"
                  value="https://atlas-voice-extension.vercel.app"
                  placeholder="Server URL"
                  class="server-input" />
+          <p class="mode-description">Leave blank to use your API key above, or use a custom server</p>
         </div>
 
         <div class="setting-item">
