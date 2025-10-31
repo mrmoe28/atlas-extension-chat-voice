@@ -398,6 +398,17 @@ function speakText(text) {
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
 
+  // Apply selected voice if available
+  const selectedVoiceIndex = els.voiceSelect.value;
+  if (selectedVoiceIndex !== '') {
+    const voices = speechSynthesis.getVoices();
+    const selectedVoice = voices[parseInt(selectedVoiceIndex)];
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      console.log('🎤 Using voice:', selectedVoice.name);
+    }
+  }
+
   utterance.onstart = () => {
     console.log('🔊 Speaking...');
     isSpeaking = true;
@@ -6067,8 +6078,60 @@ const BrowserView = (() => {
   };
 })();
 
+// Load available voices for text-to-speech
+function loadVoices() {
+  console.log('🎤 Loading available voices...');
+
+  // Get all available voices
+  const voices = speechSynthesis.getVoices();
+
+  if (voices.length === 0) {
+    console.log('⚠️ No voices loaded yet, waiting...');
+    return;
+  }
+
+  console.log(`✅ Found ${voices.length} voices`);
+
+  // Clear existing options
+  els.voiceSelect.innerHTML = '';
+
+  // Add default option
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Default Voice';
+  els.voiceSelect.appendChild(defaultOption);
+
+  // Add each voice as an option
+  voices.forEach((voice, index) => {
+    const option = document.createElement('option');
+    option.value = index;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    els.voiceSelect.appendChild(option);
+  });
+
+  // Restore saved voice selection
+  const savedVoice = localStorage.getItem('atlasVoice_selectedVoice');
+  if (savedVoice) {
+    els.voiceSelect.value = savedVoice;
+    console.log('✅ Restored voice selection:', savedVoice);
+  }
+}
+
+// Load voices when they become available
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+// Save voice selection when changed
+els.voiceSelect.addEventListener('change', () => {
+  const selectedVoice = els.voiceSelect.value;
+  localStorage.setItem('atlasVoice_selectedVoice', selectedVoice);
+  console.log('💾 Saved voice selection:', selectedVoice);
+});
+
 // Initialize
 loadSettings();
+loadVoices(); // Load voices immediately (and again when they change)
 
 // Immediately ensure voice orb is visible
 els.voiceOrbWrapper.classList.remove('hidden');
