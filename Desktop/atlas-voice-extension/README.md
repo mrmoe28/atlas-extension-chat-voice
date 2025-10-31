@@ -4,14 +4,14 @@
 
 **Transform your browser into an intelligent voice-controlled AI assistant**
 
-![Version](https://img.shields.io/badge/version-0.2.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.3.1-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 ![Chrome](https://img.shields.io/badge/Chrome-88+-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)
 
 *A Chrome Manifest V3 extension for voice AI assistance with desktop automation, screen vision, and persistent memory - powered by OpenAI's Realtime API*
 
-[🚀 Installation](#-installation) • [⚡ Quick Start](#-quick-start) • [📖 Documentation](./docs/FEATURES.md) • [🎙️ Background Mode](./BACKGROUND_MODE.md) • [🎤 Voice Commands](#-voice-commands-examples) • [🐛 Issues](https://github.com/yourusername/atlas-voice-extension/issues)
+[🚀 Installation](#-installation) • [⚡ Quick Start](#-quick-start) • [📖 Documentation](./docs/FEATURES.md) • [🎙️ Background Mode](./BACKGROUND_MODE.md) • [🎤 Voice Commands](#-voice-commands-examples) • [🐛 Issues](https://github.com/mrmoe28/atlas-extension-chat-voice/issues)
 
 </div>
 
@@ -43,6 +43,8 @@
 ### Core Capabilities
 
 🎤 **Voice-to-Voice AI** - Natural conversation with OpenAI's GPT-4 Realtime API
+🔑 **Local API Key Storage** - Use your own OpenAI API key (no server required!)
+🌐 **Browser Automation** - Click, type, fill forms, and navigate websites by voice
 🖥️ **Desktop Commander** - Control your computer: files, apps, volume, brightness, lock screen
 👁️ **Vision Mode** - AI can see and analyze your screen with GPT-4 Vision
 🧠 **Persistent Memory** - Remembers you across sessions with NeonDB storage
@@ -104,16 +106,28 @@
 
 ---
 
-## ⚡ Quick Start (No Setup Required!)
+## ⚡ Quick Start
 
-**The extension is pre-configured to use our hosted server!** Just install and start talking:
+**Two ways to get started:**
+
+### Option 1: Use Your Own API Key (Recommended) 🔑
 
 1. **Install the extension** (see installation above)
-2. **Click the Atlas Voice icon** to open the side panel  
-3. **Click "Connect"** - Uses our hosted server at `atlas-extension-chat-voice.vercel.app`
+2. **Get your OpenAI API key** from [OpenAI Platform](https://platform.openai.com/api-keys)
+3. **Open Atlas settings** (click menu button)
+4. **Enter your API key** in the "OpenAI API Key" field
+5. **Click "Connect"** and start talking!
+
+**Benefits:** Direct connection, full privacy, no server needed
+
+### Option 2: Use Hosted Server 🌐
+
+1. **Install the extension** (see installation above)
+2. **Click the Atlas Voice icon** to open the side panel
+3. **Click "Connect"** - Uses our hosted server at `atlas-voice-extension.vercel.app`
 4. **Start talking!** Click "Hold to talk" and speak naturally
 
-**That's it! No server setup needed.** ✨
+**Benefits:** No API key needed, instant setup
 
 ---
 
@@ -333,7 +347,7 @@ A: Typically <500ms via WebRTC direct connection to OpenAI's Realtime API.
 A: Currently OpenAI only. Support for other providers (Anthropic Claude, local models) is on the roadmap.
 
 **Q: Is the code open source?**
-A: Yes! MIT License. View, modify, and contribute on [GitHub](https://github.com/yourusername/atlas-voice-extension).
+A: Yes! MIT License. View, modify, and contribute on [GitHub](https://github.com/mrmoe28/atlas-extension-chat-voice).
 
 **Q: Can I self-host everything?**
 A: Yes! The server code is in `dev/server/`. Deploy to Vercel, your own server, or run locally. See [Advanced Setup](#️-advanced-setup-optional).
@@ -352,7 +366,7 @@ A: Ensure "Desktop Commander mode" is enabled in settings. macOS users may need 
 **Q: Can't see the extension icon?**
 A: Click the puzzle piece icon in Chrome's toolbar and pin Atlas Voice Panel for easy access.
 
-**Still have questions?** Check the [Full Documentation](./docs/FEATURES.md) or [open an issue](https://github.com/yourusername/atlas-voice-extension/issues).
+**Still have questions?** Check the [Full Documentation](./docs/FEATURES.md) or [open an issue](https://github.com/mrmoe28/atlas-extension-chat-voice/issues).
 
 ---
 
@@ -423,24 +437,26 @@ A: Click the puzzle piece icon in Chrome's toolbar and pin Atlas Voice Panel for
 
 ## 🗺️ Roadmap
 
-### ✅ Current Version (0.2.0)
+### ✅ Current Version (0.3.1)
 
 - Voice-to-voice AI communication
-- Push-to-talk and continuous modes
+- Push-to-talk, continuous, and wake word modes
 - Desktop automation commands
+- **NEW:** Local API key storage (use your own OpenAI key!)
+- **NEW:** Enhanced web automation (click, type, fill forms by voice)
 - Screen capture and vision analysis
 - Persistent memory system
 - Auto-update mechanism
 - Settings configuration
 
-### 🔄 Next Release (0.3.0)
+### 🔄 Next Release (0.4.0)
 
-- [ ] **Wake Word Detection** - Custom wake word configuration
 - [ ] **Enhanced Memory** - Memory search, categories, and export
 - [ ] **UI Improvements** - Dark mode, custom themes, resizable panels
 - [ ] **Better Error Handling** - More detailed error messages and recovery
 - [ ] **Keyboard Shortcuts** - Hotkeys for common actions
 - [ ] **Multi-language Support** - i18n for interface and commands
+- [ ] **Custom Wake Words** - Configure your own activation phrase
 
 ### 📋 Planned (0.4.0+)
 
@@ -561,8 +577,8 @@ We love contributions! Here's how you can help make Atlas Voice even better:
 
 ### Ways to Contribute
 
-- 🐛 **Report Bugs** - Found an issue? [Open a bug report](https://github.com/yourusername/atlas-voice-extension/issues/new?template=bug_report.md)
-- 💡 **Suggest Features** - Have an idea? [Request a feature](https://github.com/yourusername/atlas-voice-extension/issues/new?template=feature_request.md)
+- 🐛 **Report Bugs** - Found an issue? [Open a bug report](https://github.com/mrmoe28/atlas-extension-chat-voice/issues/new?template=bug_report.md)
+- 💡 **Suggest Features** - Have an idea? [Request a feature](https://github.com/mrmoe28/atlas-extension-chat-voice/issues/new?template=feature_request.md)
 - 📖 **Improve Documentation** - Fix typos, add examples, clarify instructions
 - 🔧 **Submit Code** - Fix bugs, add features, improve performance
 - ⭐ **Star the Repo** - Show your support and help others discover it!
@@ -630,12 +646,12 @@ This project was inspired by the need for a truly hands-free, voice-controlled c
 
 <div align="center">
 
-![GitHub Stars](https://img.shields.io/github/stars/yourusername/atlas-voice-extension?style=social)
-![GitHub Forks](https://img.shields.io/github/forks/yourusername/atlas-voice-extension?style=social)
-![GitHub Issues](https://img.shields.io/github/issues/yourusername/atlas-voice-extension)
-![GitHub Pull Requests](https://img.shields.io/github/issues-pr/yourusername/atlas-voice-extension)
-![GitHub Last Commit](https://img.shields.io/github/last-commit/yourusername/atlas-voice-extension)
-![GitHub Repo Size](https://img.shields.io/github/repo-size/yourusername/atlas-voice-extension)
+![GitHub Stars](https://img.shields.io/github/stars/mrmoe28/atlas-extension-chat-voice?style=social)
+![GitHub Forks](https://img.shields.io/github/forks/mrmoe28/atlas-extension-chat-voice?style=social)
+![GitHub Issues](https://img.shields.io/github/issues/mrmoe28/atlas-extension-chat-voice)
+![GitHub Pull Requests](https://img.shields.io/github/issues-pr/mrmoe28/atlas-extension-chat-voice)
+![GitHub Last Commit](https://img.shields.io/github/last-commit/mrmoe28/atlas-extension-chat-voice)
+![GitHub Repo Size](https://img.shields.io/github/repo-size/mrmoe28/atlas-extension-chat-voice)
 
 </div>
 
@@ -684,7 +700,7 @@ Unlike other voice assistants, Atlas Voice is designed specifically for **power 
 
 **Install Atlas Voice and start talking to your computer like never before!**
 
-[📥 Download Latest Release](https://github.com/yourusername/atlas-voice-extension/releases/latest) • [📖 Read Full Documentation](./docs/FEATURES.md) • [⭐ Star on GitHub](https://github.com/yourusername/atlas-voice-extension)
+[📥 Download Latest Release](https://github.com/mrmoe28/atlas-extension-chat-voice/releases/latest) • [📖 Read Full Documentation](./docs/FEATURES.md) • [⭐ Star on GitHub](https://github.com/mrmoe28/atlas-extension-chat-voice)
 
 <br>
 
