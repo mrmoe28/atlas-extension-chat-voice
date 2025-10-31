@@ -187,6 +187,7 @@ let isContinuousVision = false; // Continuous screen vision active
 let visionCaptureInterval = null; // Interval ID for continuous capture
 let screenStream = null; // Reusable screen capture stream
 let screenVideo = null; // Reusable video element for screen capture
+let atlasHasControl = true; // Atlas control state (true = Atlas active, false = User paused Atlas)
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
@@ -1344,6 +1345,36 @@ You: "Where would you like me to move it?" → Get coordinates → Use mouse_mov
 
 IMPORTANT: Mouse control works BEST when combined with vision! You can see exactly where to click.
 
+⏸️ USER CONTROL TOGGLE:
+IMPORTANT: The user has a floating toggle button on their browser that can pause/resume your control!
+
+**How it Works:**
+- Green "Atlas Active" = You're in control, proceed with actions
+- Red "Atlas Paused" = User has taken control, STOP all automation
+- When paused: Be ready to resume when they click the button again
+
+**When Paused:**
+- Don't execute any mouse clicks, keyboard input, or navigation
+- You can still TALK and answer questions
+- Tell user: "I've paused - let me know when you're ready for me to continue"
+- Wait for them to resume before taking actions
+
+**When Resumed:**
+- User clicked "Atlas Active" button
+- You'll see: "✅ Atlas resumed control"
+- Continue where you left off or ask what to do next
+
+**Example:**
+User clicks pause button during your task
+System: "⏸️ Atlas paused - You have control"
+You: "I've paused my actions. Let me know when you'd like me to continue!"
+
+User clicks resume button
+System: "✅ Atlas resumed control"
+You: "I'm back! Should I continue where we left off?"
+
+This lets Mo interrupt you anytime and take over - always respect the toggle state!
+
 📝 RESPONSE FORMAT:
 For Desktop Functions: USE THE FUNCTION CALLING TOOLS (open_webpage, open_folder, launch_app, create_file)
 For Web Automation: USE THE FUNCTION CALLING TOOLS (web_click_element, web_fill_form, web_navigate, web_extract_data, web_scroll)
@@ -1604,6 +1635,27 @@ IMPORTANT: You have FULL MOUSE CONTROL when combined with screen vision!
 4. Perfect for clicking videos, buttons, links when you can see them!
 
 IMPORTANT: Mouse control works BEST when combined with vision! You can see exactly where to click.
+
+⏸️ USER CONTROL TOGGLE:
+IMPORTANT: The user has a floating toggle button on their browser that can pause/resume your control!
+
+**How it Works:**
+- Green "Atlas Active" = You're in control, proceed with actions
+- Red "Atlas Paused" = User has taken control, STOP all automation
+- When paused: Be ready to resume when they click the button again
+
+**When Paused:**
+- Don't execute any mouse clicks, keyboard input, or navigation
+- You can still TALK and answer questions
+- Tell user: "I've paused - let me know when you're ready for me to continue"
+- Wait for them to resume before taking actions
+
+**When Resumed:**
+- User clicked "Atlas Active" button
+- You'll see: "✅ Atlas resumed control"
+- Continue where you left off or ask what to do next
+
+This lets Mo interrupt you anytime and take over - always respect the toggle state!
 
 📝 RESPONSE FORMAT:
 For Web Automation: USE THE FUNCTION CALLING TOOLS (web_click_element, web_fill_form, web_navigate, web_extract_data, web_scroll)
@@ -2718,6 +2770,9 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
     els.fileUploadBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
+
+    // Show control toggle on all tabs
+    showControlToggleOnAllTabs();
   } catch (err) {
     console.error(err);
     els.orbStatus.textContent = `Error: ${err.message}`;
@@ -2765,7 +2820,10 @@ function teardown() {
   els.voiceOrbWrapper.classList.remove('hidden');
   els.chatContainer.style.display = 'none';
   els.chatContainer.innerHTML = '';
-  
+
+  // Hide control toggle on all tabs
+  hideControlToggleOnAllTabs();
+
   updateOrbState();
 }
 
@@ -5676,6 +5734,70 @@ function generateCodeReviewPrompt(args) {
   prompt += `6. Refactored code examples where beneficial`;
   
   return prompt;
+}
+
+// ===== CONTROL TOGGLE FUNCTIONS =====
+
+// Show control toggle on all tabs
+async function showControlToggleOnAllTabs() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        chrome.tabs.sendMessage(tab.id, { action: 'showControlToggle' }).catch(() => {
+          // Ignore errors for tabs without content script
+        });
+      }
+    }
+    atlasHasControl = true;
+    console.log('✅ Control toggle shown on all tabs');
+  } catch (error) {
+    console.error('Error showing control toggle:', error);
+  }
+}
+
+// Hide control toggle on all tabs
+async function hideControlToggleOnAllTabs() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        chrome.tabs.sendMessage(tab.id, { action: 'hideControlToggle' }).catch(() => {
+          // Ignore errors
+        });
+      }
+    }
+    console.log('✅ Control toggle hidden on all tabs');
+  } catch (error) {
+    console.error('Error hiding control toggle:', error);
+  }
+}
+
+// Listen for control toggle messages from content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'atlasControlToggle') {
+    atlasHasControl = request.active;
+    console.log(`🎛️ Control toggle: Atlas ${atlasHasControl ? 'ACTIVE' : 'PAUSED'}`);
+
+    // Update status in UI
+    if (atlasHasControl) {
+      addMessage('system', '✅ Atlas resumed control');
+    } else {
+      addMessage('system', '⏸️ Atlas paused - You have control');
+    }
+
+    sendResponse({ success: true });
+    return true;
+  }
+});
+
+// Check if Atlas should proceed with action
+function canAtlasAct() {
+  if (!atlasHasControl) {
+    console.log('⏸️ Atlas action blocked - User has control');
+    return false;
+  }
+  return true;
 }
 
 // Initialize Browser View (temporarily disabled to fix Atlas functionality)

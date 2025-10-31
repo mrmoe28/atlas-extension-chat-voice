@@ -1585,3 +1585,145 @@ function handleDebugElements(request, sendResponse) {
     sendResponse({ error: error.message });
   }
 }
+
+// ===== ATLAS CONTROL TOGGLE =====
+// Floating button to pause/resume Atlas control
+
+let atlasControlActive = false;
+let controlToggleButton = null;
+
+// Create floating control toggle
+function createControlToggle() {
+  if (controlToggleButton) return; // Already created
+
+  // Create container
+  const container = document.createElement('div');
+  container.id = 'atlas-control-toggle';
+  container.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+
+  // Create button
+  const button = document.createElement('button');
+  button.style.cssText = `
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  `;
+
+  // Status indicator dot
+  const dot = document.createElement('span');
+  dot.style.cssText = `
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff4444;
+    display: inline-block;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+  `;
+
+  // Button text
+  const text = document.createElement('span');
+  text.textContent = 'Atlas Paused';
+
+  button.appendChild(dot);
+  button.appendChild(text);
+  container.appendChild(button);
+
+  // Hover effects
+  button.addEventListener('mouseenter', () => {
+    button.style.transform = 'scale(1.05)';
+    button.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.3)';
+  });
+
+  button.addEventListener('mouseleave', () => {
+    button.style.transform = 'scale(1)';
+    button.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
+  });
+
+  // Click handler
+  button.addEventListener('click', () => {
+    atlasControlActive = !atlasControlActive;
+    updateControlToggle();
+
+    // Notify sidepanel of state change
+    chrome.runtime.sendMessage({
+      action: 'atlasControlToggle',
+      active: atlasControlActive
+    });
+
+    // Visual feedback
+    button.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      button.style.transform = 'scale(1)';
+    }, 100);
+  });
+
+  document.body.appendChild(container);
+  controlToggleButton = { container, button, dot, text };
+}
+
+// Update toggle button appearance
+function updateControlToggle() {
+  if (!controlToggleButton) return;
+
+  const { button, dot, text } = controlToggleButton;
+
+  if (atlasControlActive) {
+    // Atlas is in control
+    button.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+    dot.style.background = '#38ef7d';
+    dot.style.boxShadow = '0 0 10px rgba(56, 239, 125, 0.5)';
+    text.textContent = 'Atlas Active';
+  } else {
+    // User has control (Atlas paused)
+    button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    dot.style.background = '#ff4444';
+    dot.style.boxShadow = '0 0 10px rgba(255, 68, 68, 0.5)';
+    text.textContent = 'Atlas Paused';
+  }
+}
+
+// Remove toggle button
+function removeControlToggle() {
+  if (controlToggleButton) {
+    controlToggleButton.container.remove();
+    controlToggleButton = null;
+  }
+}
+
+// Listen for messages to show/hide toggle
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'showControlToggle') {
+    createControlToggle();
+    sendResponse({ success: true });
+  } else if (request.action === 'hideControlToggle') {
+    removeControlToggle();
+    sendResponse({ success: true });
+  } else if (request.action === 'getControlState') {
+    sendResponse({ active: atlasControlActive });
+  } else if (request.action === 'updateControlState') {
+    atlasControlActive = request.active;
+    updateControlToggle();
+    sendResponse({ success: true });
+  }
+  return true;
+});
+
+// Create toggle when page loads (only if Atlas is connected)
+console.log('✅ Atlas control toggle ready');
