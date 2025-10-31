@@ -381,7 +381,16 @@ async function sendToGroq(message) {
   }
 }
 
-function speakText(text) {
+async function speakText(text) {
+  const selectedVoiceName = els.voiceSelect.value;
+
+  // Check if Piper voice is selected
+  if (selectedVoiceName && selectedVoiceName.startsWith('piper:')) {
+    await speakWithPiper(text, selectedVoiceName);
+    return;
+  }
+
+  // Use browser TTS
   if (!browserSynthesis) {
     console.error('❌ Speech synthesis not available');
     isSpeaking = false;
@@ -399,7 +408,6 @@ function speakText(text) {
   utterance.volume = 1.0;
 
   // Apply selected voice if available
-  const selectedVoiceName = els.voiceSelect.value;
   if (selectedVoiceName !== '') {
     const voices = speechSynthesis.getVoices();
     const selectedVoice = voices.find(voice => voice.name === selectedVoiceName);
@@ -432,6 +440,92 @@ function speakText(text) {
   };
 
   browserSynthesis.speak(utterance);
+}
+
+// Speak text using Piper TTS
+async function speakWithPiper(text, voiceValue) {
+  try {
+    // Extract voice name from "piper:voicename"
+    const voiceName = voiceValue.replace('piper:', '');
+    console.log('🎙️ Using Piper TTS voice:', voiceName);
+
+    // Update UI
+    isSpeaking = true;
+    updateOrbState();
+    els.voiceStatus.textContent = 'Generating speech...';
+
+    // Get server URL
+    const serverUrl = els.serverUrl.value.trim();
+    if (!serverUrl) {
+      throw new Error('Server URL not configured');
+    }
+
+    // Call Piper TTS API
+    const response = await fetch(`${serverUrl}/api/piper/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice: voiceName })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'TTS generation failed');
+    }
+
+    const data = await response.json();
+    console.log(`✅ Piper TTS audio generated: ${data.size} bytes`);
+
+    // Convert base64 to audio blob
+    const audioData = atob(data.audio);
+    const audioArray = new Uint8Array(audioData.length);
+    for (let i = 0; i < audioData.length; i++) {
+      audioArray[i] = audioData.charCodeAt(i);
+    }
+    const audioBlob = new Blob([audioArray], { type: 'audio/wav' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    // Play audio
+    const audio = new Audio(audioUrl);
+
+    audio.onplay = () => {
+      console.log('🔊 Playing Piper TTS audio...');
+      els.voiceStatus.textContent = 'Speaking...';
+    };
+
+    audio.onended = () => {
+      console.log('✅ Piper TTS playback complete');
+      isSpeaking = false;
+      updateOrbState();
+      els.voiceStatus.textContent = connected ? 'Hold to talk' : 'Disconnected';
+      URL.revokeObjectURL(audioUrl);
+    };
+
+    audio.onerror = (error) => {
+      console.error('❌ Audio playback error:', error);
+      isSpeaking = false;
+      updateOrbState();
+      els.voiceStatus.textContent = 'Playback error';
+      URL.revokeObjectURL(audioUrl);
+    };
+
+    await audio.play();
+
+  } catch (error) {
+    console.error('❌ Piper TTS error:', error);
+    isSpeaking = false;
+    updateOrbState();
+    els.voiceStatus.textContent = `Error: ${error.message}`;
+
+    // Show user-friendly error message
+    addMessage('system', `Piper TTS Error: ${error.message}. Falling back to browser voice.`);
+
+    // Fall back to browser TTS
+    if (browserSynthesis) {
+      browserSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      browserSynthesis.speak(utterance);
+    }
+  }
 }
 
 function stopBrowserSpeech() {
@@ -6088,7 +6182,7 @@ const BrowserView = (() => {
 })();
 
 // Load available voices for text-to-speech
-function loadVoices() {
+async function loadVoices() {
   console.log('🎤 Loading available voices...');
 
   // Get all available voices
@@ -6099,7 +6193,7 @@ function loadVoices() {
     return;
   }
 
-  console.log(`✅ Found ${voices.length} voices`);
+  console.log(`✅ Found ${voices.length} browser voices`);
 
   // Clear existing options
   els.voiceSelect.innerHTML = '';
@@ -6109,6 +6203,40 @@ function loadVoices() {
   defaultOption.value = '';
   defaultOption.textContent = 'Default Voice';
   els.voiceSelect.appendChild(defaultOption);
+
+  // Add Piper voices section header
+  const piperHeader = document.createElement('optgroup');
+  piperHeader.label = '🎙️ Piper TTS (High Quality)';
+  els.voiceSelect.appendChild(piperHeader);
+
+  // Fetch Piper voices from server
+  try {
+    const serverUrl = els.serverUrl.value.trim();
+    if (serverUrl) {
+      const response = await fetch(`${serverUrl}/api/piper/voices`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Found ${data.count} Piper voices`);
+
+        data.voices.forEach(voice => {
+          const option = document.createElement('option');
+          option.value = `piper:${voice.name}`;
+          option.textContent = `${voice.display_name} (${voice.quality})`;
+          option.dataset.piperVoice = voice.name;
+          piperHeader.appendChild(option);
+        });
+      } else {
+        console.log('ℹ️ Piper voices not available (server may not support it)');
+      }
+    }
+  } catch (error) {
+    console.log('ℹ️ Could not load Piper voices:', error.message);
+  }
+
+  // Add browser voices section header
+  const browserHeader = document.createElement('optgroup');
+  browserHeader.label = '🖥️ Browser Voices';
+  els.voiceSelect.appendChild(browserHeader);
 
   // Premium US English voices only (excluding novelty voices)
   const premiumVoices = ['Alex', 'Samantha', 'Karen', 'Victoria', 'Allison', 'Susan', 'Tom'];
@@ -6135,7 +6263,7 @@ function loadVoices() {
         const option = document.createElement('option');
         option.value = voice.name;
         option.textContent = voice.name;
-        els.voiceSelect.appendChild(option);
+        browserHeader.appendChild(option);
       }
     }
   });
