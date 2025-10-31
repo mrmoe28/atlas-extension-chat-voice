@@ -279,13 +279,15 @@ function initBrowserSpeech() {
   };
 
   browserRecognition.onerror = (event) => {
-    console.error('❌ Speech recognition error:', event.error);
-
+    // "no-speech" is a common occurrence, not an error
     if (event.error === 'no-speech') {
+      console.log('ℹ️ No speech detected (silence or background noise)');
       els.voiceStatus.textContent = 'No speech detected';
     } else if (event.error === 'aborted') {
+      console.log('ℹ️ Speech recognition aborted');
       els.voiceStatus.textContent = 'Recognition aborted';
     } else {
+      console.error('❌ Speech recognition error:', event.error);
       els.voiceStatus.textContent = `Error: ${event.error}`;
     }
 
@@ -6294,8 +6296,13 @@ els.voiceSelect.addEventListener('change', () => {
 });
 
 // Initialize
-loadSettings();
-loadVoices(); // Load voices immediately (and again when they change)
+(async function initializeExtension() {
+  loadSettings();
+  // Wait a bit for settings to load, then load voices (including Piper)
+  setTimeout(async () => {
+    await loadVoices();
+  }, 500);
+})();
 
 // Immediately ensure voice orb is visible
 els.voiceOrbWrapper.classList.remove('hidden');
