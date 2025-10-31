@@ -384,22 +384,36 @@ function createRemoteAudio() {
   remoteAudioEl = document.createElement('audio');
   remoteAudioEl.autoplay = true;
   remoteAudioEl.playsInline = true;
-  remoteAudioEl.muted = isMuted; // Apply mute state
+  remoteAudioEl.muted = false; // NEVER mute Atlas's voice output
+  remoteAudioEl.volume = 1.0; // Full volume
   document.body.appendChild(remoteAudioEl);
 
+  console.log('🔊 Created remote audio element:', {
+    autoplay: remoteAudioEl.autoplay,
+    muted: remoteAudioEl.muted,
+    volume: remoteAudioEl.volume
+  });
+
   remoteAudioEl.onplay = () => {
+    console.log('🔊 Audio playback started');
     isSpeaking = true;
     updateOrbState();
   };
 
   remoteAudioEl.onpause = () => {
+    console.log('⏸️ Audio playback paused');
     isSpeaking = false;
     updateOrbState();
   };
 
   remoteAudioEl.onended = () => {
+    console.log('✅ Audio playback ended');
     isSpeaking = false;
     updateOrbState();
+  };
+
+  remoteAudioEl.onerror = (err) => {
+    console.error('❌ Audio element error:', err);
   };
 
   return remoteAudioEl;
@@ -1048,7 +1062,42 @@ async function connectRealtime() {
     for (const track of micStream.getTracks()) pc.addTrack(track, micStream);
 
     createRemoteAudio();
-    pc.ontrack = (e) => { remoteAudioEl.srcObject = e.streams[0]; };
+    pc.ontrack = (e) => {
+      console.log('🔊 Received remote audio track:', {
+        streams: e.streams.length,
+        track: {
+          kind: e.track.kind,
+          enabled: e.track.enabled,
+          muted: e.track.muted,
+          readyState: e.track.readyState
+        },
+        stream: {
+          active: e.streams[0]?.active,
+          audioTracks: e.streams[0]?.getAudioTracks().length
+        }
+      });
+
+      remoteAudioEl.srcObject = e.streams[0];
+
+      console.log('🔊 Audio element state after srcObject set:', {
+        srcObject: !!remoteAudioEl.srcObject,
+        muted: remoteAudioEl.muted,
+        volume: remoteAudioEl.volume,
+        paused: remoteAudioEl.paused,
+        readyState: remoteAudioEl.readyState
+      });
+
+      // Explicitly play audio (Chrome autoplay policy workaround)
+      remoteAudioEl.play()
+        .then(() => {
+          console.log('✅ Audio playback started successfully - volume:', remoteAudioEl.volume);
+        })
+        .catch(err => {
+          console.error('❌ Audio playback failed:', err);
+          console.error('   This might be due to Chrome autoplay policy');
+          console.error('   User interaction may be required to start audio');
+        });
+    };
 
     dataChannel = pc.createDataChannel("oai-events");
 
@@ -3403,11 +3452,6 @@ const WakeWordDetector = (() => {
       // Unmute the microphone
       isMuted = false;
 
-      // Update audio element
-      if (remoteAudioEl) {
-        remoteAudioEl.muted = false;
-      }
-
       // Enable microphone tracks
       if (micStream) {
         const audioTracks = micStream.getAudioTracks();
@@ -3434,11 +3478,6 @@ const WakeWordDetector = (() => {
 
           // Mute the microphone
           isMuted = true;
-
-          // Update audio element
-          if (remoteAudioEl) {
-            remoteAudioEl.muted = true;
-          }
 
           // Disable microphone tracks
           if (micStream) {
@@ -4816,16 +4855,12 @@ els.interruptBtn.addEventListener('click', () => {
   }
 });
 
-// Mute button
+// Mute button (ONLY controls microphone, NOT Atlas's voice)
 els.muteBtn.addEventListener('click', () => {
   isMuted = !isMuted;
 
-  // Mute/unmute remote audio output (Atlas's voice)
-  if (remoteAudioEl) {
-    remoteAudioEl.muted = isMuted;
-  }
-
   // Disable/enable microphone input tracks to stop sending audio to OpenAI
+  // NOTE: This does NOT mute Atlas's voice - only your microphone
   if (micStream) {
     const audioTracks = micStream.getAudioTracks();
     audioTracks.forEach(track => {
@@ -4839,7 +4874,7 @@ els.muteBtn.addEventListener('click', () => {
     els.muteBtn.classList.add('muted');
     els.muteIcon.style.display = 'none';
     els.unmutedIcon.style.display = 'block';
-    els.voiceStatus.textContent = 'Atlas is muted (mic off)';
+    els.voiceStatus.textContent = 'Microphone muted (Atlas can still speak)';
   } else {
     els.muteBtn.classList.remove('muted');
     els.muteIcon.style.display = 'block';
@@ -4849,7 +4884,7 @@ els.muteBtn.addEventListener('click', () => {
     }
   }
 
-  console.log(isMuted ? '🔇 Atlas muted (microphone disabled)' : '🔊 Atlas unmuted (microphone enabled)');
+  console.log(isMuted ? '🔇 Microphone disabled (Atlas can still speak)' : '🔊 Microphone enabled');
 });
 
 // Web Speech Fallback
