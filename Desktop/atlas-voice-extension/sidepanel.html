@@ -114,6 +114,20 @@
         </div>
 
         <div class="setting-item">
+          <label for="aiProvider" class="slider-label">
+            <span>AI Provider</span>
+          </label>
+          <select id="aiProvider" class="ai-provider-select">
+            <option value="groq">Groq + Browser Speech (FREE)</option>
+            <option value="openai">OpenAI Realtime (Requires API Key)</option>
+          </select>
+          <p class="mode-description">
+            <strong>Groq:</strong> Free, fast, uses browser speech recognition<br>
+            <strong>OpenAI:</strong> Premium quality, but requires paid API access
+          </p>
+        </div>
+
+        <div class="setting-item">
           <label class="mode-toggle">
             <input type="checkbox" id="desktopMode" />
             <span>Desktop Commander mode</span>

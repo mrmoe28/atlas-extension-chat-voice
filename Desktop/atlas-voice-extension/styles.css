@@ -1187,6 +1187,42 @@ h1 {
   color: var(--brand);
 }
 
+/* AI Provider Select */
+.ai-provider-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3e%3cpath fill='%23888' d='M6 9L1 4h10z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.ai-provider-select:hover {
+  border-color: var(--brand);
+}
+
+.ai-provider-select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.ai-provider-select option {
+  padding: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* Knowledge Base Styles */
 .text-label {
   display: block;
