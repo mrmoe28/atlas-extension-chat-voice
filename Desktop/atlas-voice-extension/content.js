@@ -1458,8 +1458,7 @@ function handleSimulateFileUpload(request, sendResponse) {
     }
     
     // Simulate drag and drop file upload
-    const dataTransfer = new DataTransfer();
-    fileObjects.forEach(file => dataTransfer.items.add(file));
+    const dataTransfer = createDataTransfer(fileObjects);
     
     // Highlight target
     highlightElementWithColor(targetElement, 'green', 2000);
@@ -1499,21 +1498,58 @@ function handleSimulateFileUpload(request, sendResponse) {
   }
 }
 
-// Helper function to create DataTransfer object
+// Helper function to create DataTransfer object with fallbacks
 function createDataTransfer(files) {
-  const dataTransfer = new DataTransfer();
-  if (files && files.length > 0) {
-    files.forEach(file => {
-      if (file instanceof File) {
-        dataTransfer.items.add(file);
-      } else if (typeof file === 'string') {
-        // Create a simple text file
-        const blob = new Blob([file], { type: 'text/plain' });
-        const fileObj = new File([blob], 'file.txt', { type: 'text/plain' });
-        dataTransfer.items.add(fileObj);
-      }
-    });
+  let dataTransfer = null;
+
+  try {
+    // Try to create DataTransfer object - not supported in all browsers
+    if (typeof DataTransfer !== 'undefined') {
+      dataTransfer = new DataTransfer();
+    }
+  } catch (error) {
+    // Fallback: create a mock DataTransfer-like object
+    console.log('DataTransfer constructor not available, using fallback');
+    dataTransfer = {
+      items: [],
+      types: [],
+      files: [],
+      dropEffect: 'copy',
+      effectAllowed: 'all',
+      getData: function(type) { return ''; },
+      setData: function(type, data) { },
+      clearData: function(type) { },
+      setDragImage: function() { }
+    };
   }
+
+  if (dataTransfer && files && files.length > 0) {
+    try {
+      files.forEach(file => {
+        if (file instanceof File) {
+          if (dataTransfer.items && typeof dataTransfer.items.add === 'function') {
+            dataTransfer.items.add(file);
+          }
+          if (dataTransfer.files) {
+            dataTransfer.files.push(file);
+          }
+        } else if (typeof file === 'string') {
+          // Create a simple text file
+          const blob = new Blob([file], { type: 'text/plain' });
+          const fileObj = new File([blob], 'file.txt', { type: 'text/plain' });
+          if (dataTransfer.items && typeof dataTransfer.items.add === 'function') {
+            dataTransfer.items.add(fileObj);
+          }
+          if (dataTransfer.files) {
+            dataTransfer.files.push(fileObj);
+          }
+        }
+      });
+    } catch (error) {
+      console.log('Error adding files to DataTransfer:', error.message);
+    }
+  }
+
   return dataTransfer;
 }
 
