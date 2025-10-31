@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Atlas Voice Panel",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Voice AI assistant with Desktop Commander - screen capture and automation capabilities",
   "permissions": [
     "storage",
