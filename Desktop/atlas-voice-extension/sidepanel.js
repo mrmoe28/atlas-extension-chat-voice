@@ -184,50 +184,52 @@ let previousActiveElement = null;
 // Open settings modal
 function openSettingsModal() {
   if (isModalOpen) return;
-  
+
   isModalOpen = true;
   previousActiveElement = document.activeElement;
-  
+
   // Add open class with slight delay for smooth animation
   els.settingsModal.classList.add('open');
   els.menuBtn.classList.add('active');
-  
-  // Set ARIA attributes
+
+  // Set ARIA attributes and remove inert to make modal interactive
   els.settingsModal.setAttribute('aria-hidden', 'false');
-  
+  els.settingsModal.removeAttribute('inert');
+
   // Focus management - focus the close button
   setTimeout(() => {
     els.settingsClose.focus();
   }, 100);
-  
+
   // Prevent body scroll when modal is open
   document.body.style.overflow = 'hidden';
-  
+
   console.log('🔧 Settings modal opened');
 }
 
 // Close settings modal
 function closeSettingsModal() {
   if (!isModalOpen) return;
-  
+
   isModalOpen = false;
-  
+
   // Remove open class
   els.settingsModal.classList.remove('open');
   els.menuBtn.classList.remove('active');
-  
-  // Set ARIA attributes
+
+  // Set ARIA attributes and add inert to make modal non-interactive
   els.settingsModal.setAttribute('aria-hidden', 'true');
-  
+  els.settingsModal.setAttribute('inert', '');
+
   // Restore focus to previous element
   if (previousActiveElement) {
     previousActiveElement.focus();
     previousActiveElement = null;
   }
-  
+
   // Restore body scroll
   document.body.style.overflow = '';
-  
+
   console.log('🔧 Settings modal closed');
 }
 
@@ -2637,246 +2639,6 @@ function showKnowledgeModal(data) {
   });
 }
 
-// Browser View functionality
-const BrowserView = (() => {
-  let isOpen = false;
-  let currentUrl = '';
-  let history = [];
-  let historyIndex = -1;
-
-  const elements = {
-    container: null,
-    frame: null,
-    urlInput: null,
-    backBtn: null,
-    forwardBtn: null,
-    refreshBtn: null,
-    goBtn: null,
-    closeBtn: null,
-    modeToggle: null
-  };
-
-  function init() {
-    // Get elements
-    elements.container = document.getElementById('browserViewContainer');
-    elements.frame = document.getElementById('browserViewFrame');
-    elements.urlInput = document.getElementById('browserUrlInput');
-    elements.backBtn = document.getElementById('browserBackBtn');
-    elements.forwardBtn = document.getElementById('browserForwardBtn');
-    elements.refreshBtn = document.getElementById('browserRefreshBtn');
-    elements.goBtn = document.getElementById('browserGoBtn');
-    elements.closeBtn = document.getElementById('browserCloseBtn');
-    elements.modeToggle = document.getElementById('browserViewMode');
-
-    if (!elements.container) return;
-
-    // Setup event listeners
-    setupEventListeners();
-    loadSettings();
-  }
-
-  function setupEventListeners() {
-    // Navigation buttons
-    elements.backBtn?.addEventListener('click', goBack);
-    elements.forwardBtn?.addEventListener('click', goForward);
-    elements.refreshBtn?.addEventListener('click', refresh);
-    elements.goBtn?.addEventListener('click', navigateToUrl);
-    elements.closeBtn?.addEventListener('click', close);
-
-    // URL input
-    elements.urlInput?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        navigateToUrl();
-      }
-    });
-
-    // Mode toggle
-    elements.modeToggle?.addEventListener('change', (e) => {
-      if (e.target.checked) {
-        open();
-      } else {
-        close();
-      }
-      saveSettings();
-    });
-
-    // Frame events
-    elements.frame?.addEventListener('load', handleFrameLoad);
-    elements.frame?.addEventListener('error', handleFrameError);
-  }
-
-  function open(url = 'https://www.google.com') {
-    if (!elements.container) return;
-
-    isOpen = true;
-    elements.container.style.display = 'flex';
-    
-    // Hide other content
-    const voiceOrbWrapper = document.getElementById('voiceOrbWrapper');
-    const chatContainer = document.getElementById('chatContainer');
-    
-    if (voiceOrbWrapper) voiceOrbWrapper.style.display = 'none';
-    if (chatContainer) chatContainer.style.display = 'none';
-
-    // Navigate to URL
-    navigateToUrl(url);
-    
-    // Update mode toggle
-    if (elements.modeToggle) {
-      elements.modeToggle.checked = true;
-    }
-  }
-
-  function close() {
-    if (!elements.container) return;
-
-    isOpen = false;
-    elements.container.style.display = 'none';
-    
-    // Show other content
-    const voiceOrbWrapper = document.getElementById('voiceOrbWrapper');
-    if (voiceOrbWrapper) voiceOrbWrapper.style.display = 'flex';
-
-    // Update mode toggle
-    if (elements.modeToggle) {
-      elements.modeToggle.checked = false;
-    }
-  }
-
-  function navigateToUrl(url) {
-    const targetUrl = url || elements.urlInput?.value;
-    if (!targetUrl) return;
-
-    // Normalize URL
-    let normalizedUrl = targetUrl.trim();
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-      if (normalizedUrl.includes('.')) {
-        normalizedUrl = 'https://' + normalizedUrl;
-      } else {
-        normalizedUrl = 'https://www.google.com/search?q=' + encodeURIComponent(normalizedUrl);
-      }
-    }
-
-    // Add to history
-    if (normalizedUrl !== currentUrl) {
-      history = history.slice(0, historyIndex + 1);
-      history.push(normalizedUrl);
-      historyIndex = history.length - 1;
-      currentUrl = normalizedUrl;
-    }
-
-    // Update URL input
-    if (elements.urlInput) {
-      elements.urlInput.value = normalizedUrl;
-    }
-
-    // Open URL in new tab instead of iframe (Chrome security restriction)
-    try {
-      chrome.tabs.create({ url: normalizedUrl });
-      updateNavigationButtons();
-    } catch (error) {
-      console.error('Navigation error:', error);
-      showError('Failed to navigate to URL');
-    }
-  }
-
-  function goBack() {
-    if (historyIndex > 0) {
-      historyIndex--;
-      const url = history[historyIndex];
-      currentUrl = url;
-      // Open in new tab instead of iframe
-      chrome.tabs.create({ url: url });
-      if (elements.urlInput) elements.urlInput.value = url;
-      updateNavigationButtons();
-    }
-  }
-
-  function goForward() {
-    if (historyIndex < history.length - 1) {
-      historyIndex++;
-      const url = history[historyIndex];
-      currentUrl = url;
-      // Open in new tab instead of iframe
-      chrome.tabs.create({ url: url });
-      if (elements.urlInput) elements.urlInput.value = url;
-      updateNavigationButtons();
-    }
-  }
-
-  function refresh() {
-    // Refresh current tab instead of iframe
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.reload(tabs[0].id);
-      }
-    });
-  }
-
-  function updateNavigationButtons() {
-    if (elements.backBtn) {
-      elements.backBtn.disabled = historyIndex <= 0;
-    }
-    if (elements.forwardBtn) {
-      elements.forwardBtn.disabled = historyIndex >= history.length - 1;
-    }
-  }
-
-  function handleFrameLoad() {
-    console.log('Browser view frame loaded');
-    hideLoading();
-  }
-
-  function handleFrameError() {
-    console.error('Browser view frame error');
-    showError('Failed to load page');
-  }
-
-  function showLoading() {
-    // Could add loading indicator here
-  }
-
-  function hideLoading() {
-    // Hide loading indicator
-  }
-
-  function showError(message) {
-    // Could show error message in frame
-    console.error('Browser view error:', message);
-  }
-
-  function loadSettings() {
-    try {
-      const settings = JSON.parse(localStorage.getItem('atlas-settings') || '{}');
-      if (settings.browserViewMode && elements.modeToggle) {
-        elements.modeToggle.checked = true;
-        open();
-      }
-    } catch (error) {
-      console.error('Failed to load browser view settings:', error);
-    }
-  }
-
-  function saveSettings() {
-    try {
-      const settings = JSON.parse(localStorage.getItem('atlas-settings') || '{}');
-      settings.browserViewMode = elements.modeToggle?.checked || false;
-      localStorage.setItem('atlas-settings', JSON.stringify(settings));
-    } catch (error) {
-      console.error('Failed to save browser view settings:', error);
-    }
-  }
-
-  // Public API
-  return {
-    init,
-    open,
-    close,
-    navigateToUrl,
-    isOpen: () => isOpen
-  };
-})();
-
 // Initialize
 loadSettings();
 
@@ -2997,6 +2759,3 @@ function generateCodeReviewPrompt(args) {
   
   return prompt;
 }
-
-// Initialize Browser View (temporarily disabled to fix Atlas functionality)
-// BrowserView.init();

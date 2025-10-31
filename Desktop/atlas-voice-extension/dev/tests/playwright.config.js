@@ -21,8 +21,8 @@ export default defineConfig({
         // Enable extension testing
         launchOptions: {
           args: [
-            '--disable-extensions-except=./extension',
-            '--load-extension=./extension',
+            '--disable-extensions-except=.',
+            '--load-extension=.',
             '--disable-web-security',
             '--disable-features=VizDisplayCompositor'
           ]

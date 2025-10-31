@@ -3,8 +3,8 @@ import path from 'path';
 
 test.describe('Atlas Voice Extension Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Load the extension
-    const extensionPath = path.join(process.cwd(), 'extension');
+    // Load the extension from root directory
+    const extensionPath = path.join(process.cwd());
     
     await page.goto('chrome://extensions/');
     
@@ -89,9 +89,9 @@ test.describe('Atlas Voice Extension Tests', () => {
     await expect(menuBtn).toBeVisible();
     await menuBtn.click();
     
-    // Check settings dropdown is open
-    const settingsDropdown = page.locator('#settingsDropdown');
-    await expect(settingsDropdown).toHaveClass(/open/);
+    // Check settings modal is open
+    const settingsModal = page.locator('#settingsModal');
+    await expect(settingsModal).toHaveClass(/open/);
     
     // Voice orb should still be visible (might be behind dropdown but not hidden)
     const orbClasses = await voiceOrbWrapper.getAttribute('class');
