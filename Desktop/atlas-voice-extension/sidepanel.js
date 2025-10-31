@@ -6103,13 +6103,47 @@ function loadVoices() {
   defaultOption.textContent = 'Default Voice';
   els.voiceSelect.appendChild(defaultOption);
 
-  // Add each voice as an option
+  // Filter for high-quality US English voices only
+  const highQualityVoices = [
+    'Alex',           // macOS - Most natural male voice
+    'Samantha',       // macOS - Clear, soothing female voice
+    'Karen',          // macOS - Alternative female voice
+    'Google US English',  // Google voice (if available)
+    'Microsoft David',    // Windows high-quality male
+    'Microsoft Zira',     // Windows high-quality female
+    'Chrome OS US English 1',
+    'Chrome OS US English 2',
+    'Chrome OS US English 3'
+  ];
+
+  // Add each high-quality US English voice
   voices.forEach((voice, index) => {
-    const option = document.createElement('option');
-    option.value = voice.name; // Use voice name instead of index for stability
-    option.textContent = `${voice.name} (${voice.lang})`;
-    els.voiceSelect.appendChild(option);
+    // Only include en-US voices that are in our high-quality list
+    if (voice.lang === 'en-US' || voice.lang === 'en_US') {
+      // Check if voice name matches any high-quality voice
+      const isHighQuality = highQualityVoices.some(hq => voice.name.includes(hq));
+
+      if (isHighQuality) {
+        const option = document.createElement('option');
+        option.value = voice.name;
+        option.textContent = voice.name; // Simplified display
+        els.voiceSelect.appendChild(option);
+      }
+    }
   });
+
+  // If no voices found, show all en-US voices as fallback
+  if (els.voiceSelect.options.length === 1) {
+    console.log('⚠️ No high-quality voices found, showing all en-US voices');
+    voices.forEach((voice, index) => {
+      if (voice.lang === 'en-US' || voice.lang === 'en_US') {
+        const option = document.createElement('option');
+        option.value = voice.name;
+        option.textContent = voice.name;
+        els.voiceSelect.appendChild(option);
+      }
+    });
+  }
 
   // Restore saved voice selection
   const savedVoiceName = localStorage.getItem('atlasVoice_selectedVoice');
