@@ -36,3 +36,10 @@ extension.zip
 *.crx
 *.pem
 .vercel
+
+# Piper TTS voice models (too large for GitHub)
+piper-tts/voices/*.onnx
+piper-tts/voices/*.onnx.json
+piper-tts/voices/temp/
+piper-tts/venv/
+piper-tts/*.wav
