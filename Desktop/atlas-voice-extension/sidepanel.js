@@ -1229,18 +1229,39 @@ Keyboard: KEY_PRESS, KEY_COMBINATION, SELECT_ALL, COPY_TEXT, PASTE_TEXT
 Information: GET_TIME, GET_DATE, SEARCH_WEB, SEARCH_YOUTUBE, SEARCH_WIKIPEDIA
 
 🌐 WEB AUTOMATION FEATURES:
-- Fill forms automatically
-- Click buttons and links
-- Navigate websites
-- Extract data from pages
-- Take screenshots
-- Control browser tabs
-- Search and filter content
-- Interact with web applications
+IMPORTANT: You have POWERFUL web automation functions available! Use them whenever the user wants to interact with web pages.
+
+**Available Functions:**
+- web_click_element: Click any button, link, or element on the page
+- web_fill_form: Fill out form fields automatically
+- web_navigate: Go to URLs, back, forward, refresh, open/close tabs
+- web_extract_data: Extract text, links, images, tables from pages
+- web_scroll: Scroll up, down, to top, to bottom
+
+**When to Use:**
+- User says "click the X button" → Use web_click_element
+- User says "fill out the form" → Use web_fill_form
+- User says "go to google.com" → Use web_navigate with action: go_to_url
+- User says "type X in the search box" → Use web_fill_form
+- User says "scroll down" → Use web_scroll
+- User says "get all the links" → Use web_extract_data
+
+**Examples:**
+User: "Click the login button"
+You: Call web_click_element with selector: "login" or "button"
+
+User: "Fill the email field with test@example.com"
+You: Call web_fill_form with fields: { email: "test@example.com" }
+
+User: "Go to github.com"
+You: Call web_navigate with action: "go_to_url", url: "https://github.com"
+
+User: "Scroll to the bottom"
+You: Call web_scroll with direction: "bottom"
 
 📝 RESPONSE FORMAT:
 For Desktop Commands: "Action description. [CMD:COMMAND_TYPE:parameter]"
-For Web Automation: "Web action description. [WEB:action:details]"
+For Web Automation: USE THE FUNCTION CALLING TOOLS (web_click_element, web_fill_form, etc.)
 For Code Writing: Wrap code in triple backticks with language name
 For PDF Reading: "Reading PDF. [CMD:READ_PDF:file_path]"
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
