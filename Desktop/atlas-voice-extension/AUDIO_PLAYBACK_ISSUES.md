@@ -73,16 +73,16 @@ function createDataTransfer(files) {
 
 **Root Cause**: Vercel serverless functions don't have access to local filesystem for Piper TTS voice models.
 
-**Solution**:
+**Solution** (if using Vercel):
+- Vercel deployment works for most endpoints but not Piper TTS
+- Use Vercel by default, switch to localhost only when Piper TTS is needed
+
+**Solution** (for Piper TTS):
 1. Run local Atlas server: `cd dev/server && npm run dev`
-2. Update extension settings to use `http://localhost:8787` instead of Vercel URL
+2. Update extension settings to use `http://localhost:8787`
 3. Reload extension
 
-**Files to Update**:
-- `sidepanel.html`: Change serverUrl default value
-- `dev/build-tools/extension/sidepanel.html`: Change serverUrl default value
-
-**Prevention**: Always use local server for Piper TTS functionality, Vercel only for API key fallback.
+**Prevention**: Use localhost server when Piper TTS voices are needed, Vercel for other functionality.
 
 ## Issue: Hamburger Menu Not Clickable
 
