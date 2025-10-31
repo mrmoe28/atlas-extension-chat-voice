@@ -232,9 +232,10 @@ function openSettingsModal() {
   els.settingsModal.classList.add('open');
   els.menuBtn.classList.add('active');
   
-  // Set ARIA attributes
+  // Set ARIA attributes and remove inert (allows focus on elements inside)
   els.settingsModal.setAttribute('aria-hidden', 'false');
-  
+  els.settingsModal.removeAttribute('inert');
+
   // Focus management - focus the close button
   setTimeout(() => {
     els.settingsClose.focus();
@@ -256,9 +257,10 @@ function closeSettingsModal() {
   els.settingsModal.classList.remove('open');
   els.menuBtn.classList.remove('active');
   
-  // Set ARIA attributes
+  // Set ARIA attributes and make modal inert (prevents focus on hidden elements)
   els.settingsModal.setAttribute('aria-hidden', 'true');
-  
+  els.settingsModal.setAttribute('inert', '');
+
   // Restore focus to previous element
   if (previousActiveElement) {
     previousActiveElement.focus();
