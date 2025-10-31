@@ -185,6 +185,8 @@ let isDesktopMode = false;
 let isVisionMode = false;
 let isContinuousVision = false; // Continuous screen vision active
 let visionCaptureInterval = null; // Interval ID for continuous capture
+let screenStream = null; // Reusable screen capture stream
+let screenVideo = null; // Reusable video element for screen capture
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
@@ -1314,9 +1316,38 @@ You: Call web_navigate with action: "go_to_url", url: "https://github.com"
 User: "Scroll to the bottom"
 You: Call web_scroll with direction: "bottom"
 
+🖱️ MOUSE CONTROL FEATURES:
+IMPORTANT: You have FULL MOUSE CONTROL when combined with screen vision!
+
+**Available Mouse Functions:**
+- mouse_move: Move cursor to specific coordinates
+- mouse_click_at: Click at specific coordinates (when you can see the exact position)
+
+**How to Use With Vision:**
+1. User asks you to click something
+2. Enable vision to see their screen: call enable_continuous_vision
+3. You can see where elements are positioned
+4. Use mouse_click_at with the exact coordinates you see
+5. OR find the element and use web_click_element (easier)
+
+**When to Use:**
+- User says "move my mouse to..." → Use mouse_move
+- User says "click on the video" and you can SEE it → Use mouse_click_at with visible coordinates
+- User wants precise mouse control → Combine vision + mouse functions
+
+**Examples:**
+User: "Click on that play button" (with vision enabled)
+You: See play button at coordinates (450, 300) → Call mouse_click_at with x: 450, y: 300
+
+User: "Move my mouse over there"
+You: "Where would you like me to move it?" → Get coordinates → Use mouse_move
+
+IMPORTANT: Mouse control works BEST when combined with vision! You can see exactly where to click.
+
 📝 RESPONSE FORMAT:
 For Desktop Functions: USE THE FUNCTION CALLING TOOLS (open_webpage, open_folder, launch_app, create_file)
 For Web Automation: USE THE FUNCTION CALLING TOOLS (web_click_element, web_fill_form, web_navigate, web_extract_data, web_scroll)
+For Mouse Control: USE THE FUNCTION CALLING TOOLS (mouse_move, mouse_click_at) - works best with vision enabled
 For Code Writing: Wrap code in triple backticks with language name
 For PDF Reading: Use the read_pdf function (or just let user upload the PDF - automatic text extraction)
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
@@ -1553,15 +1584,30 @@ NEVER say "I can't see your screen" or "Please describe it" - YOU CAN SEE! Just 
 
 🌐 WEB AUTOMATION FEATURES:
 - Fill forms automatically
-- Click buttons and links  
+- Click buttons and links
 - Navigate websites
 - Extract data from pages
-- Take screenshots
 - Control browser tabs
 - Search and filter content
 
+🖱️ MOUSE CONTROL FEATURES:
+IMPORTANT: You have FULL MOUSE CONTROL when combined with screen vision!
+
+**Available Mouse Functions:**
+- mouse_move: Move cursor to specific coordinates
+- mouse_click_at: Click at specific coordinates (when you can see the exact position)
+
+**How to Use:**
+1. Enable vision to see the user's screen
+2. Identify where elements are positioned
+3. Use mouse_click_at with exact coordinates OR web_click_element
+4. Perfect for clicking videos, buttons, links when you can see them!
+
+IMPORTANT: Mouse control works BEST when combined with vision! You can see exactly where to click.
+
 📝 RESPONSE FORMAT:
 For Web Automation: USE THE FUNCTION CALLING TOOLS (web_click_element, web_fill_form, web_navigate, web_extract_data, web_scroll)
+For Mouse Control: USE THE FUNCTION CALLING TOOLS (mouse_move, mouse_click_at) - works best with vision enabled
 For Prompt Generation: Use the create_claude_prompt, create_debugging_prompt, or create_code_review_prompt functions
 For Web Search: Use the web_search function to search and optionally save to knowledge base
 For Data Extraction: Use the web_extract_data function to scrape and extract page data
@@ -1863,6 +1909,50 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
         },
         {
           type: 'function',
+          name: 'mouse_move',
+          description: 'Moves the mouse cursor to specific coordinates on the page. Use this when user wants to point to something or move cursor to a location.',
+          parameters: {
+            type: 'object',
+            properties: {
+              x: {
+                type: 'number',
+                description: 'X coordinate (pixels from left edge of viewport)'
+              },
+              y: {
+                type: 'number',
+                description: 'Y coordinate (pixels from top edge of viewport)'
+              }
+            },
+            required: ['x', 'y']
+          }
+        },
+        {
+          type: 'function',
+          name: 'mouse_click_at',
+          description: 'Clicks the mouse at specific coordinates. Use when you can see exact position from screen vision.',
+          parameters: {
+            type: 'object',
+            properties: {
+              x: {
+                type: 'number',
+                description: 'X coordinate to click'
+              },
+              y: {
+                type: 'number',
+                description: 'Y coordinate to click'
+              },
+              button: {
+                type: 'string',
+                description: 'Mouse button to click',
+                enum: ['left', 'right'],
+                default: 'left'
+              }
+            },
+            required: ['x', 'y']
+          }
+        },
+        {
+          type: 'function',
           name: 'web_search',
           description: 'Searches the web for information and optionally saves findings to long-term knowledge base. Use this to find current information, research topics, or learn new things.',
           parameters: {
@@ -2094,6 +2184,51 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
               }
             },
             required: ['query']
+          }
+        },
+        // Mouse Control Tools (available in both modes)
+        {
+          type: 'function',
+          name: 'mouse_move',
+          description: 'Moves the mouse cursor to specific coordinates on the page. Use this when user wants to point to something or move cursor to a location.',
+          parameters: {
+            type: 'object',
+            properties: {
+              x: {
+                type: 'number',
+                description: 'X coordinate (pixels from left edge of viewport)'
+              },
+              y: {
+                type: 'number',
+                description: 'Y coordinate (pixels from top edge of viewport)'
+              }
+            },
+            required: ['x', 'y']
+          }
+        },
+        {
+          type: 'function',
+          name: 'mouse_click_at',
+          description: 'Clicks the mouse at specific coordinates. Use when you can see exact position from screen vision.',
+          parameters: {
+            type: 'object',
+            properties: {
+              x: {
+                type: 'number',
+                description: 'X coordinate to click'
+              },
+              y: {
+                type: 'number',
+                description: 'Y coordinate to click'
+              },
+              button: {
+                type: 'string',
+                description: 'Mouse button to click',
+                enum: ['left', 'right'],
+                default: 'left'
+              }
+            },
+            required: ['x', 'y']
           }
         },
         // Vision Tools (available in both modes)
@@ -2388,6 +2523,33 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
               } else {
                 result = { success: false, error: webResult.error || 'Failed to scroll' };
                 addMessage('assistant', `❌ Error scrolling: ${webResult.error}`);
+              }
+            } else if (functionName === 'mouse_move') {
+              // Mouse control: Move cursor
+              const webResult = await executeBrowserCommand('mouseMove', {
+                x: args.x,
+                y: args.y
+              });
+              if (webResult.success) {
+                result = webResult;
+                addMessage('assistant', `🖱️ Moved mouse to (${args.x}, ${args.y})`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to move mouse' };
+                addMessage('assistant', `❌ Error moving mouse: ${webResult.error}`);
+              }
+            } else if (functionName === 'mouse_click_at') {
+              // Mouse control: Click at coordinates
+              const webResult = await executeBrowserCommand('mouseClick', {
+                x: args.x,
+                y: args.y,
+                button: args.button || 'left'
+              });
+              if (webResult.success) {
+                result = webResult;
+                addMessage('assistant', `🖱️ Clicked at (${args.x}, ${args.y})`);
+              } else {
+                result = { success: false, error: webResult.error || 'Failed to click' };
+                addMessage('assistant', `❌ Error clicking: ${webResult.error}`);
               }
             } else if (functionName === 'web_search') {
               // Web search: Search the web and optionally save to knowledge base
@@ -4658,40 +4820,72 @@ async function captureScreen() {
 
 els.captureScreenBtn.addEventListener('click', captureScreen);
 
-// Continuous Vision Functions
-async function captureSingleFrameForVision() {
+// Initialize screen share stream (called once when vision starts)
+async function initializeScreenShare() {
+  if (screenStream && screenStream.active) {
+    return true; // Already initialized
+  }
+
   try {
-    // Request screen capture
-    const stream = await navigator.mediaDevices.getDisplayMedia({
+    // Request screen capture ONCE
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: {
         mediaSource: 'screen',
-        width: { ideal: 1280 }, // Lower resolution for continuous capture
+        width: { ideal: 1280 },
         height: { ideal: 720 }
       }
     });
 
-    // Create video element to capture frame
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.play();
+    // Create video element and keep it alive
+    screenVideo = document.createElement('video');
+    screenVideo.srcObject = screenStream;
+    screenVideo.muted = true; // Mute to prevent audio feedback
+    screenVideo.play();
 
     // Wait for video to be ready
     await new Promise(resolve => {
-      video.onloadedmetadata = resolve;
+      screenVideo.onloadedmetadata = resolve;
     });
 
-    // Create canvas and capture frame
+    // Handle stream ending (user stops sharing)
+    screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+      console.log('📸 Screen sharing ended by user');
+      stopContinuousVision();
+      screenStream = null;
+      screenVideo = null;
+    });
+
+    console.log('📸 Screen share initialized - dialog will not appear again');
+    return true;
+  } catch (err) {
+    console.error('Screen share initialization error:', err);
+    if (err.name === 'NotAllowedError') {
+      addMessage('assistant', '👁️ Screen sharing permission denied');
+    }
+    return false;
+  }
+}
+
+// Continuous Vision Functions
+async function captureSingleFrameForVision() {
+  try {
+    // Initialize screen share if not already done
+    if (!screenStream || !screenStream.active) {
+      const initialized = await initializeScreenShare();
+      if (!initialized) {
+        return false;
+      }
+    }
+
+    // Create canvas and capture frame from existing video
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = screenVideo.videoWidth;
+    canvas.height = screenVideo.videoHeight;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(screenVideo, 0, 0);
 
     // Convert to base64
-    const screenshot = canvas.toDataURL('image/jpeg', 0.7); // Slightly lower quality for performance
-
-    // Stop the stream immediately
-    stream.getTracks().forEach(track => track.stop());
+    const screenshot = canvas.toDataURL('image/jpeg', 0.7);
 
     // Send image through Realtime API data channel
     if (dataChannel && dataChannel.readyState === 'open') {
@@ -4761,6 +4955,17 @@ function stopContinuousVision() {
     visionCaptureInterval = null;
   }
 
+  // Stop the screen stream
+  if (screenStream) {
+    screenStream.getTracks().forEach(track => track.stop());
+    screenStream = null;
+  }
+
+  if (screenVideo) {
+    screenVideo.srcObject = null;
+    screenVideo = null;
+  }
+
   isContinuousVision = false;
 
   // Update UI
@@ -4769,7 +4974,7 @@ function stopContinuousVision() {
     els.orbStatus.textContent = 'Ready - Hold button to talk';
   }
 
-  console.log('👁️ Continuous vision stopped');
+  console.log('👁️ Continuous vision stopped - screen sharing ended');
 }
 
 // Permission Modal Logic
