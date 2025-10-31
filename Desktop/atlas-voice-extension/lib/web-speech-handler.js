@@ -19,7 +19,7 @@ export class WebSpeechHandler {
   /**
    * Initialize speech recognition
    */
-  initialize() {
+  initialize(options = {}) {
     // Check browser support
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -28,9 +28,11 @@ export class WebSpeechHandler {
     }
 
     this.recognition = new SpeechRecognition();
-    this.recognition.continuous = false; // Stop after each phrase
+    // Best practice: Set continuous to true for auto-listening mode
+    this.recognition.continuous = options.continuous !== undefined ? options.continuous : true;
     this.recognition.interimResults = true; // Get partial results
-    this.recognition.lang = 'en-US';
+    // Best practice: Set language explicitly
+    this.recognition.lang = options.lang || 'en-US';
     this.recognition.maxAlternatives = 1;
 
     // Handle speech recognition results
@@ -68,7 +70,7 @@ export class WebSpeechHandler {
       if (this.onEndCallback) this.onEndCallback();
     };
 
-    // Handle errors
+    // Handle errors - Best practice: restart on error for continuous mode
     this.recognition.onerror = (event) => {
       console.error('🎤 Speech recognition error:', event.error);
       this.isListening = false;
@@ -76,6 +78,20 @@ export class WebSpeechHandler {
       if (this.onErrorCallback) {
         this.onErrorCallback(event.error);
       }
+    };
+
+    // Handle no match - Best practice: trigger callback for continuous mode restart
+    this.recognition.onnomatch = () => {
+      console.warn('🎤 Speech not recognized');
+      if (this.onErrorCallback) {
+        this.onErrorCallback('no-match');
+      }
+    };
+
+    // Handle speech end - Best practice: trigger for continuous mode management
+    this.recognition.onspeechend = () => {
+      console.log('🎤 Speech ended (user stopped talking)');
+      // Don't stop here - let onend handle it
     };
 
     console.log('✅ Web Speech API initialized');

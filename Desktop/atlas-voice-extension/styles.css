@@ -746,27 +746,47 @@ h1 {
 }
 
 .mute-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--text);
   cursor: pointer;
-  padding: 10px;
-  border-radius: 12px;
+  padding: 14px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  width: 56px;
+  height: 56px;
 }
 
 .mute-btn:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text);
+  background: var(--brand);
+  color: white;
   border-color: var(--brand);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(74, 163, 255, 0.3);
+}
+
+.mute-btn:active {
+  transform: scale(0.95);
 }
 
 .mute-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* When muted, show red color */
+.mute-btn.muted {
+  background: var(--error);
+  border-color: var(--error);
+  color: white;
+}
+
+.mute-btn.muted:hover {
+  background: #dc2626;
+  border-color: #dc2626;
 }
 
 /* Voice Footer (legacy compatibility) */

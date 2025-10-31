@@ -143,8 +143,6 @@ const els = {
   serverUrl: document.getElementById('serverUrl'),
   connectBtn: document.getElementById('connectBtn'),
   statusDot: document.getElementById('statusDot'),
-  voiceBtn: document.getElementById('voiceBtn'),
-  voiceStatus: document.getElementById('voiceStatus'),
   interruptBtn: document.getElementById('interruptBtn'),
   continuousMode: document.getElementById('continuousMode'),
   desktopMode: document.getElementById('desktopMode'),
@@ -170,7 +168,9 @@ const els = {
   viewKnowledgeBtn: document.getElementById('viewKnowledgeBtn'),
   clearMemoryBtn: document.getElementById('clearMemoryBtn'),
   aiProvider: document.getElementById('aiProvider'),
-  apiKey: document.getElementById('apiKey')
+  apiKey: document.getElementById('apiKey'),
+  autoConnect: document.getElementById('autoConnect'),
+  muteBtn: document.getElementById('muteBtn')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -179,6 +179,7 @@ let isSpeaking = false;
 let isContinuousMode = false;
 let isDesktopMode = false;
 let isVisionMode = false;
+let isMuted = false;
 let currentUserMessage = '';
 let currentAIMessage = '';
 let lastScreenshot = null;
@@ -368,7 +369,28 @@ function updateOrbState() {
     els.voiceOrb.classList.add('listening');
     els.orbStatus.textContent = 'Listening...';
   } else if (connected) {
-    els.orbStatus.textContent = 'Ready - Hold button to talk';
+    els.orbStatus.textContent = 'Connected - Ready';
+  }
+}
+
+// Helper function to safely send data channel messages
+function safeDataChannelSend(message) {
+  if (!dataChannel) {
+    console.error('❌ DataChannel is null, cannot send message');
+    return false;
+  }
+
+  if (dataChannel.readyState !== 'open') {
+    console.error(`❌ DataChannel not open (state: ${dataChannel.readyState}), cannot send message`);
+    return false;
+  }
+
+  try {
+    dataChannel.send(JSON.stringify(message));
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to send dataChannel message:', error);
+    return false;
   }
 }
 
@@ -560,9 +582,9 @@ async function connectGroq() {
     await groqConnector.initialize(groqApiKey);
     console.log('✅ Groq API initialized');
 
-    // Initialize Web Speech API
-    webSpeechHandler.initialize();
-    console.log('✅ Web Speech API initialized');
+    // Initialize Web Speech API with continuous mode for auto-listening
+    webSpeechHandler.initialize({ continuous: true, lang: 'en-US' });
+    console.log('✅ Web Speech API initialized (continuous mode)');
 
     // Set up speech recognition callbacks
     webSpeechHandler.onResult((transcript, isFinal) => {
@@ -577,7 +599,25 @@ async function connectGroq() {
 
     webSpeechHandler.onError((error) => {
       console.error('🎤 Speech error:', error);
-      els.orbStatus.textContent = `Speech error: ${error}`;
+
+      // Only show error if it's not a normal stop (aborted/no-speech after pause)
+      if (error !== 'aborted' && error !== 'no-speech') {
+        els.orbStatus.textContent = `Speech error: ${error}`;
+      }
+
+      // Best practice: Auto-restart on error (except for permission denied)
+      if (connected && isContinuousMode && currentAIProvider === 'groq' && !isSpeaking) {
+        if (error !== 'not-allowed' && error !== 'service-not-allowed') {
+          console.log(`🔄 Auto-restarting after error: ${error}`);
+          setTimeout(() => {
+            try {
+              webSpeechHandler.startListening();
+            } catch (restartError) {
+              console.error('❌ Failed to restart after error:', restartError);
+            }
+          }, 400);  // Best practice: 400-500ms delay
+        }
+      }
     });
 
     webSpeechHandler.onStart(() => {
@@ -588,14 +628,26 @@ async function connectGroq() {
     webSpeechHandler.onEnd(() => {
       isListening = false;
       updateOrbState();
+
+      // Best practice: Auto-restart with delay (but not while AI is speaking)
+      if (connected && isContinuousMode && currentAIProvider === 'groq' && !isSpeaking) {
+        console.log('🔄 Auto-restarting speech recognition (continuous mode)...');
+        setTimeout(() => {
+          try {
+            webSpeechHandler.startListening();
+          } catch (error) {
+            console.error('❌ Failed to restart listening:', error);
+          }
+        }, 400);  // Best practice: 400ms delay to prevent loops
+      }
     });
 
     // Mark as connected
     connected = true;
-    els.orbStatus.textContent = 'Ready - Hold button to talk (Groq Mode)';
+    els.orbStatus.textContent = 'Connected - Listening...';
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
-    els.voiceBtn.disabled = false;
+    els.muteBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
 
@@ -629,15 +681,29 @@ async function handleGroqConversation(userMessage) {
         removeTypingIndicator();
         addMessage('assistant', completeMessage);
 
-        // Speak the response using browser TTS
-        try {
-          await webSpeechHandler.speak(completeMessage);
-        } catch (speechError) {
-          console.error('TTS error:', speechError);
+        // Speak the response using browser TTS (if not muted)
+        if (!isMuted) {
+          try {
+            await webSpeechHandler.speak(completeMessage);
+          } catch (speechError) {
+            console.error('TTS error:', speechError);
+          }
         }
 
         isSpeaking = false;
         updateOrbState();
+
+        // Restart listening after speaking (continuous mode)
+        if (connected && isContinuousMode && currentAIProvider === 'groq') {
+          setTimeout(() => {
+            try {
+              console.log('🎤 Restarting listening after AI response...');
+              webSpeechHandler.startListening();
+            } catch (error) {
+              console.error('❌ Failed to restart listening:', error);
+            }
+          }, 500);
+        }
       }
     );
 
@@ -1280,7 +1346,7 @@ IMPORTANT:
       };
 
       console.log('🚀 Sending session update. Tools:', tools.length);
-      dataChannel.send(JSON.stringify(sessionUpdate));
+      safeDataChannelSend(sessionUpdate);
     };
 
     dataChannel.onmessage = async (e) => {
@@ -1496,17 +1562,17 @@ IMPORTANT:
           console.log('📤 Sending function result:', result);
 
           // Send function result back to OpenAI
-          dataChannel.send(JSON.stringify({
+          safeDataChannelSend({
             type: 'conversation.item.create',
             item: {
               type: 'function_call_output',
               call_id: callId,
               output: JSON.stringify(result)
             }
-          }));
+          });
 
           // Trigger AI response
-          dataChannel.send(JSON.stringify({ type: 'response.create' }));
+          safeDataChannelSend({ type: 'response.create' });
         }
 
         // Handle AI text responses
@@ -1558,10 +1624,10 @@ IMPORTANT:
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
     connected = true;
-    els.orbStatus.textContent = 'Ready - Hold button to talk';
+    els.orbStatus.textContent = 'Connected - Listening...';
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
-    els.voiceBtn.disabled = false;
+    els.muteBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
   } catch (err) {
@@ -1603,8 +1669,7 @@ function teardown() {
   els.orbStatus.textContent = 'Click Connect in menu to start';
   els.statusDot.classList.remove('connected');
   els.interruptBtn.disabled = true;
-  els.voiceBtn.disabled = true;
-  els.voiceBtn.classList.remove('active');
+  els.muteBtn.disabled = true;
   els.connectBtn.textContent = 'Connect';
   els.connectBtn.classList.remove('connected');
   
@@ -1620,8 +1685,6 @@ function enableMic() {
   if (!connected || !micStream) return;
   for (const t of micStream.getAudioTracks()) t.enabled = true;
   isListening = true;
-  els.voiceBtn.classList.add('active');
-  els.voiceStatus.textContent = 'Listening...';
   updateOrbState();
 }
 
@@ -1629,109 +1692,19 @@ function disableMic() {
   if (!micStream) return;
   for (const t of micStream.getAudioTracks()) t.enabled = false;
   isListening = false;
-  els.voiceBtn.classList.remove('active');
-  els.voiceStatus.textContent = isContinuousMode ? 'Click to talk' : 'Hold to talk';
   updateOrbState();
 }
 
-// Press-to-Talk Mode
+// Press-to-Talk Mode (DEPRECATED - Auto-listening mode active)
 function setupPressToTalk() {
-  // Remove any existing event listeners by cloning the button
-  const newVoiceBtn = els.voiceBtn.cloneNode(true);
-  els.voiceBtn.parentNode.replaceChild(newVoiceBtn, els.voiceBtn);
-  els.voiceBtn = newVoiceBtn;
-  
-  let isHolding = false;
-  let clickTimeout = null;
-
-  // Hold to talk functionality
-  els.voiceBtn.addEventListener('mousedown', (e) => {
-    console.log('🎤 Voice button mousedown - connected:', connected, 'continuous:', isContinuousMode, 'provider:', currentAIProvider);
-
-    if (!connected || isContinuousMode) return;
-
-    isHolding = true;
-    // Clear any pending click timeout
-    if (clickTimeout) {
-      clearTimeout(clickTimeout);
-      clickTimeout = null;
-    }
-
-    // Use appropriate voice handler based on AI provider
-    if (currentAIProvider === 'groq') {
-      console.log('🎤 Starting Groq speech recognition...');
-      try {
-        webSpeechHandler.startListening();
-      } catch (error) {
-        console.error('❌ Failed to start speech recognition:', error);
-        els.orbStatus.textContent = `Speech error: ${error.message}`;
-      }
-    } else {
-      console.log('🎤 Starting OpenAI mic...');
-      enableMic();
-    }
-  });
-
-  ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => {
-    els.voiceBtn.addEventListener(evt, () => {
-      console.log('🎤 Voice button', evt, '- connected:', connected, 'continuous:', isContinuousMode, 'provider:', currentAIProvider);
-
-      if (!connected || isContinuousMode) return;
-
-      isHolding = false;
-
-      // Use appropriate voice handler based on AI provider
-      if (currentAIProvider === 'groq') {
-        console.log('🎤 Stopping Groq speech recognition...');
-        webSpeechHandler.stopListening();
-      } else {
-        console.log('🎤 Stopping OpenAI mic...');
-        disableMic();
-      }
-    });
-  });
-
-  // Click to toggle listening (pause/resume) - only if not holding
-  els.voiceBtn.addEventListener('click', (e) => {
-    if (!connected || isContinuousMode) return;
-    
-    // If we were just holding, ignore the click
-    if (isHolding) {
-      return;
-    }
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (isListening) {
-      disableMic();
-      els.voiceStatus.textContent = 'Paused - Hold to talk';
-    } else {
-      enableMic();
-      els.voiceStatus.textContent = 'Listening...';
-    }
-  });
+  // Voice button removed - auto-listening mode active
+  console.log('⚠️ Press-to-talk mode disabled - using auto-listening');
 }
 
-// Continuous Mode (Toggle)
+// Continuous Mode (DEPRECATED - Auto-listening always active)
 function setupContinuousMode() {
-  // Remove any existing event listeners by cloning the button
-  const newVoiceBtn = els.voiceBtn.cloneNode(true);
-  els.voiceBtn.parentNode.replaceChild(newVoiceBtn, els.voiceBtn);
-  els.voiceBtn = newVoiceBtn;
-  
-  els.voiceBtn.addEventListener('click', (e) => {
-    if (!connected || !isContinuousMode) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (isListening) {
-      disableMic();
-    } else {
-      enableMic();
-    }
-  });
+  // Voice button removed - auto-listening always active
+  console.log('⚠️ Manual continuous mode toggle disabled - auto-listening always active');
 }
 
 // Mode switching
@@ -1902,17 +1875,56 @@ You: "Searching YouTube. [CMD:SEARCH_YOUTUBE:music]"
 MAX 3 words per response.`
       : `You are Atlas Voice. Keep responses under 5 words.`;
 
-    dataChannel.send(JSON.stringify({
+    safeDataChannelSend({
       type: 'session.update',
       session: {
         instructions: instructions
       }
-    }));
+    });
 
     console.log('Updated session instructions:', isDesktopMode ? 'Desktop Commander enabled' : 'Standard mode');
   }
 
   saveSettings();
+});
+
+// Auto-connect toggle
+els.autoConnect.addEventListener('change', () => {
+  saveSettings();
+  console.log('🔄 Auto-connect setting changed:', els.autoConnect.checked);
+});
+
+// Mute button functionality
+function updateMuteButton() {
+  if (isMuted) {
+    // Show unmuted icon (with X)
+    document.getElementById('muteIcon').style.display = 'none';
+    document.getElementById('unmutedIcon').style.display = 'block';
+    els.muteBtn.classList.add('muted');
+    els.muteBtn.title = 'Unmute Atlas voice';
+  } else {
+    // Show normal speaker icon
+    document.getElementById('muteIcon').style.display = 'block';
+    document.getElementById('unmutedIcon').style.display = 'none';
+    els.muteBtn.classList.remove('muted');
+    els.muteBtn.title = 'Mute Atlas voice';
+  }
+
+  // Update audio element and speech synthesis
+  if (remoteAudioEl) {
+    remoteAudioEl.muted = isMuted;
+  }
+
+  // Stop any ongoing speech
+  if (isMuted && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+els.muteBtn.addEventListener('click', () => {
+  isMuted = !isMuted;
+  updateMuteButton();
+  console.log('🔇 Mute toggled:', isMuted);
 });
 
 // Map command type from AI response to API format
@@ -2673,8 +2685,9 @@ function loadSettings() {
   const savedTemperature = localStorage.getItem('atlasVoice_temperature');
   const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
   const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
+  const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions, savedAutoConnect });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -2715,6 +2728,14 @@ function loadSettings() {
     els.specialInstructions.value = savedSpecialInstructions;
     console.log('✅ Special instructions restored');
   }
+
+  if (savedAutoConnect === 'true') {
+    els.autoConnect.checked = true;
+    // Enable continuous mode by default when auto-connect is enabled
+    els.continuousMode.checked = true;
+    isContinuousMode = true;
+    console.log('✅ Auto-connect enabled, continuous mode activated');
+  }
 }
 
 // Save settings to localStorage
@@ -2726,7 +2747,8 @@ function saveSettings() {
     visionMode: els.visionMode.checked,
     temperature: els.temperatureSlider.value,
     memoryEnabled: els.memoryEnabled.checked,
-    specialInstructions: els.specialInstructions.value
+    specialInstructions: els.specialInstructions.value,
+    autoConnect: els.autoConnect.checked
   };
 
   console.log('💾 Saving settings:', settings);
@@ -2738,6 +2760,7 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_temperature', settings.temperature);
   localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
   localStorage.setItem('atlasVoice_specialInstructions', settings.specialInstructions);
+  localStorage.setItem('atlasVoice_autoConnect', String(settings.autoConnect));
 
   console.log('✅ Settings saved');
 }
@@ -2851,6 +2874,50 @@ setupContinuousMode();
 webSpeechFallbackSetup();
 updateOrbState();
 checkFirstTimeUse();
+
+// Auto-connect if enabled
+setTimeout(async () => {
+  const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
+  if (savedAutoConnect === 'true' && !connected) {
+    console.log('🚀 Auto-connecting...');
+    try {
+      // Check AI provider
+      const savedProvider = localStorage.getItem('atlasVoice_aiProvider') || 'groq';
+      currentAIProvider = savedProvider;
+
+      if (savedProvider === 'groq') {
+        await connectGroq();
+
+        // Auto-start listening for Groq mode
+        setTimeout(() => {
+          try {
+            console.log('🎤 Starting auto-listening (Groq mode)...');
+            webSpeechHandler.startListening();
+          } catch (error) {
+            console.error('❌ Failed to start listening:', error);
+            els.orbStatus.textContent = `Mic error: ${error.message}`;
+          }
+        }, 500);
+      } else {
+        await connectRealtime();
+
+        // Auto-start listening for OpenAI Realtime mode
+        setTimeout(() => {
+          try {
+            console.log('🎤 Starting auto-listening (OpenAI mode)...');
+            enableMic();
+          } catch (error) {
+            console.error('❌ Failed to start listening:', error);
+            els.orbStatus.textContent = `Mic error: ${error.message}`;
+          }
+        }, 500);
+      }
+    } catch (err) {
+      console.error('❌ Auto-connect failed:', err);
+      els.orbStatus.textContent = `Auto-connect failed: ${err.message}`;
+    }
+  }
+}, 1000);
 
 // Prompt Generation Functions
 function generateClaudePrompt(args) {
