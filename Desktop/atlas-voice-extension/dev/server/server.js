@@ -510,6 +510,94 @@ app.post('/api/vision', async (req, res) => {
 });
 
 /**
+ * Groq Chat API endpoint
+ * Cost-free alternative to OpenAI using Groq's ultra-fast inference
+ */
+app.post('/api/groq', async (req, res) => {
+  try {
+    const { message, conversationHistory = [] } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message required' });
+    }
+
+    // Check if Groq API key is configured
+    const groqApiKey = (process.env.GROQ_API_KEY || '').trim();
+    if (!groqApiKey || groqApiKey === '') {
+      console.error('GROQ_API_KEY not configured');
+      return res.status(500).json({
+        error: 'GROQ_API_KEY not configured',
+        message: 'Please add your Groq API key to Vercel environment variables'
+      });
+    }
+
+    console.log('Processing message with Groq...');
+
+    // Build messages array with conversation history
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Atlas, a helpful and friendly AI voice assistant. You provide clear, concise responses.
+
+Key capabilities you have access to:
+- Desktop automation (open folders, create files, control volume, brightness, lock screen)
+- Screen capture and visual analysis
+- Conversation memory and learning patterns
+
+Keep responses natural and conversational for voice interaction.`
+      },
+      ...conversationHistory,
+      {
+        role: 'user',
+        content: message
+      }
+    ];
+
+    // Call Groq API
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',  // Fast, high-quality model
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1024,
+        top_p: 1,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Groq API error:', response.status, errorText);
+      return res.status(response.status).json({
+        error: `Groq API failed: ${response.status}`,
+        details: errorText,
+        message: 'Groq API error - check API key and quota'
+      });
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.choices[0]?.message?.content || 'I apologize, but I couldn\'t generate a response.';
+
+    console.log('Groq response generated');
+
+    res.json({
+      success: true,
+      message: assistantMessage,
+      model: 'llama-3.3-70b-versatile',
+      usage: data.usage
+    });
+  } catch (e) {
+    console.error('Groq API error:', e);
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+/**
  * Update Checker API
  * Checks GitHub Releases for new extension versions
  */
