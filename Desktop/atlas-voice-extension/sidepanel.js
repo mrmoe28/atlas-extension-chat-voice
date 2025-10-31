@@ -193,6 +193,12 @@ let currentAIMessage = '';
 let lastScreenshot = null;
 let memoryContext = ''; // Loaded memories for AI context
 
+// AI Provider Configuration (Groq vs OpenAI)
+let aiProvider = 'groq'; // 'groq' or 'openai'
+let browserRecognition = null; // Web Speech API recognition
+let browserSynthesis = window.speechSynthesis;
+let conversationHistory = []; // For Groq conversation context
+
 // Initialize persistent user ID and session management
 function initializeUserSession() {
   // Use fixed user ID to match database user
@@ -216,6 +222,209 @@ function initializeUserSession() {
 // Initialize user and session
 const { userId, sessionId } = initializeUserSession();
 console.log('🚀 Atlas initialized with User ID:', userId.substring(0, 20) + '...');
+
+// =============================================================================
+// BROWSER SPEECH RECOGNITION (For Groq Mode)
+// =============================================================================
+
+function initBrowserSpeech() {
+  if (!('webkitSpeechRecognition' in window)) {
+    console.error('❌ Browser Speech Recognition not supported');
+    els.voiceStatus.textContent = 'Speech recognition not supported in this browser';
+    return false;
+  }
+
+  const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+  browserRecognition = new SpeechRecognition();
+
+  browserRecognition.continuous = true;
+  browserRecognition.interimResults = true;
+  browserRecognition.lang = 'en-US';
+  browserRecognition.maxAlternatives = 1;
+
+  let finalTranscript = '';
+  let interimTranscript = '';
+
+  browserRecognition.onstart = () => {
+    console.log('🎤 Browser speech recognition started');
+    isListening = true;
+    updateOrbState();
+    els.voiceStatus.textContent = 'Listening...';
+  };
+
+  browserRecognition.onresult = (event) => {
+    interimTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript + ' ';
+        console.log('🎤 Final transcript:', transcript);
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+
+    // Show interim results in UI
+    if (interimTranscript) {
+      els.voiceStatus.textContent = `Hearing: "${interimTranscript}"`;
+    }
+
+    // Send to Groq when we have final transcript
+    if (finalTranscript.trim()) {
+      sendToGroq(finalTranscript.trim());
+      finalTranscript = '';
+    }
+  };
+
+  browserRecognition.onerror = (event) => {
+    console.error('❌ Speech recognition error:', event.error);
+
+    if (event.error === 'no-speech') {
+      els.voiceStatus.textContent = 'No speech detected';
+    } else if (event.error === 'aborted') {
+      els.voiceStatus.textContent = 'Recognition aborted';
+    } else {
+      els.voiceStatus.textContent = `Error: ${event.error}`;
+    }
+
+    isListening = false;
+    updateOrbState();
+  };
+
+  browserRecognition.onend = () => {
+    console.log('🎤 Browser speech recognition ended');
+    isListening = false;
+    updateOrbState();
+
+    // Auto-restart in continuous mode
+    if (continuousMode && connected) {
+      setTimeout(() => {
+        if (connected && !isMuted) {
+          browserRecognition.start();
+        }
+      }, 100);
+    }
+  };
+
+  return true;
+}
+
+async function sendToGroq(message) {
+  try {
+    console.log('📤 Sending to Groq:', message);
+    els.voiceStatus.textContent = 'Thinking...';
+    isSpeaking = true;
+    updateOrbState();
+
+    // Add user message to chat
+    addMessage('user', message);
+
+    // Add to conversation history
+    conversationHistory.push({
+      role: 'user',
+      content: message
+    });
+
+    // Keep only last 10 messages for context
+    if (conversationHistory.length > 10) {
+      conversationHistory = conversationHistory.slice(-10);
+    }
+
+    const response = await fetch(`${serverUrl}/api/groq`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: message,
+        conversationHistory: conversationHistory.slice(0, -1) // Exclude current message
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Groq API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.message;
+
+    console.log('✅ Groq response:', assistantMessage);
+
+    // Add assistant response to chat
+    addMessage('assistant', assistantMessage);
+
+    // Add to conversation history
+    conversationHistory.push({
+      role: 'assistant',
+      content: assistantMessage
+    });
+
+    // Speak the response using browser TTS
+    speakText(assistantMessage);
+
+  } catch (error) {
+    console.error('❌ Groq error:', error);
+    els.voiceStatus.textContent = 'Error processing request';
+    isSpeaking = false;
+    updateOrbState();
+
+    addMessage('system', `Error: ${error.message}`);
+  }
+}
+
+function speakText(text) {
+  if (!browserSynthesis) {
+    console.error('❌ Speech synthesis not available');
+    isSpeaking = false;
+    updateOrbState();
+    return;
+  }
+
+  // Cancel any ongoing speech
+  browserSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US';
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+
+  utterance.onstart = () => {
+    console.log('🔊 Speaking...');
+    isSpeaking = true;
+    updateOrbState();
+    els.voiceStatus.textContent = 'Speaking...';
+  };
+
+  utterance.onend = () => {
+    console.log('✅ Speech complete');
+    isSpeaking = false;
+    updateOrbState();
+    els.voiceStatus.textContent = connected ? 'Hold to talk' : 'Disconnected';
+  };
+
+  utterance.onerror = (event) => {
+    console.error('❌ Speech synthesis error:', event);
+    isSpeaking = false;
+    updateOrbState();
+  };
+
+  browserSynthesis.speak(utterance);
+}
+
+function stopBrowserSpeech() {
+  if (browserRecognition) {
+    browserRecognition.stop();
+  }
+  if (browserSynthesis) {
+    browserSynthesis.cancel();
+  }
+  isListening = false;
+  isSpeaking = false;
+  updateOrbState();
+}
 
 // Settings Modal Management
 let isModalOpen = false;
@@ -4163,6 +4372,48 @@ els.continuousMode.addEventListener('change', () => {
   saveSettings();
 });
 
+// AI Provider selection
+els.aiProvider = document.getElementById('aiProvider');
+if (els.aiProvider) {
+  // Load saved AI provider preference
+  chrome.storage.local.get(['aiProvider'], (result) => {
+    aiProvider = result.aiProvider || 'groq'; // Default to Groq (free)
+    els.aiProvider.value = aiProvider;
+    console.log('✅ AI Provider loaded:', aiProvider);
+  });
+
+  // Save AI provider when changed
+  els.aiProvider.addEventListener('change', () => {
+    const newProvider = els.aiProvider.value;
+    console.log('🔄 AI Provider changing from', aiProvider, 'to', newProvider);
+
+    // Disconnect if currently connected
+    if (connected) {
+      console.log('⚠️ Disconnecting to switch AI provider...');
+
+      // Disconnect based on current provider
+      if (aiProvider === 'groq') {
+        stopBrowserSpeech();
+        conversationHistory = [];
+      } else {
+        teardown();
+      }
+
+      connected = false;
+      els.connectBtn.textContent = 'Connect';
+      els.connectBtn.classList.remove('connected');
+      els.voiceStatus.textContent = 'Disconnected - Click Connect to use ' +
+        (newProvider === 'groq' ? 'Groq (FREE)' : 'OpenAI');
+      updateOrbState();
+    }
+
+    // Update provider
+    aiProvider = newProvider;
+    chrome.storage.local.set({ aiProvider });
+    console.log('✅ AI Provider updated to:', aiProvider);
+  });
+}
+
 // Desktop mode toggle
 els.desktopMode.addEventListener('change', () => {
   isDesktopMode = els.desktopMode.checked;
@@ -4826,13 +5077,47 @@ if (els.connectBtn) {
     console.log('🔗 Connect button clicked, connected:', connected);
     try {
       if (!connected) {
-        console.log('🚀 Starting connection...');
-        await connectRealtime();
+        console.log('🚀 Starting connection with provider:', aiProvider);
+
+        if (aiProvider === 'groq') {
+          // Connect using Groq + Browser Speech
+          if (!initBrowserSpeech()) {
+            throw new Error('Failed to initialize browser speech recognition');
+          }
+
+          connected = true;
+          els.connectBtn.textContent = 'Disconnect';
+          els.connectBtn.classList.add('connected');
+          els.voiceStatus.textContent = 'Connected - Hold to talk';
+          console.log('✅ Connected to Groq with browser speech');
+          updateOrbState();
+
+          // Start recognition in continuous mode
+          if (continuousMode && browserRecognition) {
+            browserRecognition.start();
+          }
+        } else {
+          // Connect using OpenAI Realtime API
+          await connectRealtime();
+        }
+
         // Close settings modal after connecting
         closeSettingsModal();
       } else {
         console.log('🔌 Disconnecting...');
-        teardown();
+
+        // Disconnect based on current provider
+        if (aiProvider === 'groq') {
+          stopBrowserSpeech();
+          conversationHistory = []; // Clear conversation history
+          connected = false;
+          els.connectBtn.textContent = 'Connect';
+          els.connectBtn.classList.remove('connected');
+          els.voiceStatus.textContent = 'Disconnected';
+          updateOrbState();
+        } else {
+          teardown();
+        }
       }
     } catch (error) {
       console.error('❌ Connection error:', error);
