@@ -5,7 +5,7 @@
 
 import { isNewerVersion } from './version-compare.js';
 
-const UPDATE_API_URL = 'http://localhost:8787/api/updates/check';
+const UPDATE_API_URL = 'https://atlas-extension-chat-voice.vercel.app/api/updates/check';
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000; // 4 hours
 const UPDATE_ALARM_NAME = 'atlas-update-check';
 
