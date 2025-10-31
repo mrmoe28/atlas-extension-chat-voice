@@ -538,6 +538,16 @@ async function connectGroq() {
   try {
     console.log('🚀 Starting Groq connection...');
 
+    // Check if Web Speech API is available
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      throw new Error('Speech Recognition not supported in this browser. Please use Chrome.');
+    }
+
+    if (!window.speechSynthesis) {
+      throw new Error('Speech Synthesis not supported in this browser. Please use Chrome.');
+    }
+
     // Get API key from settings or use default free tier
     groqApiKey = els.apiKey.value.trim();
 
@@ -548,9 +558,11 @@ async function connectGroq() {
 
     // Initialize Groq connector
     await groqConnector.initialize(groqApiKey);
+    console.log('✅ Groq API initialized');
 
     // Initialize Web Speech API
     webSpeechHandler.initialize();
+    console.log('✅ Web Speech API initialized');
 
     // Set up speech recognition callbacks
     webSpeechHandler.onResult((transcript, isFinal) => {
@@ -1634,6 +1646,8 @@ function setupPressToTalk() {
 
   // Hold to talk functionality
   els.voiceBtn.addEventListener('mousedown', (e) => {
+    console.log('🎤 Voice button mousedown - connected:', connected, 'continuous:', isContinuousMode, 'provider:', currentAIProvider);
+
     if (!connected || isContinuousMode) return;
 
     isHolding = true;
@@ -1645,22 +1659,33 @@ function setupPressToTalk() {
 
     // Use appropriate voice handler based on AI provider
     if (currentAIProvider === 'groq') {
-      webSpeechHandler.startListening();
+      console.log('🎤 Starting Groq speech recognition...');
+      try {
+        webSpeechHandler.startListening();
+      } catch (error) {
+        console.error('❌ Failed to start speech recognition:', error);
+        els.orbStatus.textContent = `Speech error: ${error.message}`;
+      }
     } else {
+      console.log('🎤 Starting OpenAI mic...');
       enableMic();
     }
   });
 
   ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => {
     els.voiceBtn.addEventListener(evt, () => {
+      console.log('🎤 Voice button', evt, '- connected:', connected, 'continuous:', isContinuousMode, 'provider:', currentAIProvider);
+
       if (!connected || isContinuousMode) return;
 
       isHolding = false;
 
       // Use appropriate voice handler based on AI provider
       if (currentAIProvider === 'groq') {
+        console.log('🎤 Stopping Groq speech recognition...');
         webSpeechHandler.stopListening();
       } else {
+        console.log('🎤 Stopping OpenAI mic...');
         disableMic();
       }
     });

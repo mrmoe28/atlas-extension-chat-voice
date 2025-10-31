@@ -18,6 +18,7 @@
   ],
   "host_permissions": [
     "https://api.openai.com/*",
+    "https://api.groq.com/*",
     "https://atlas-extension-chat-voice.vercel.app/*",
     "http://localhost:8787/*",
     "<all_urls>"
