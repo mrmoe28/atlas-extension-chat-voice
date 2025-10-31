@@ -2783,10 +2783,15 @@ async function handleFileUpload(event) {
             // Configure PDF.js worker (must be done before loading)
             if (typeof pdfjsLib !== 'undefined') {
               pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+            } else {
+              throw new Error('PDF.js library not loaded');
             }
 
+            // Convert ArrayBuffer to Uint8Array for PDF.js
+            const pdfData = content instanceof ArrayBuffer ? new Uint8Array(content) : content;
+
             // Load PDF using PDF.js
-            const loadingTask = pdfjsLib.getDocument({ data: content });
+            const loadingTask = pdfjsLib.getDocument({ data: pdfData });
             const pdf = await loadingTask.promise;
 
             // Extract text from all pages
@@ -2841,6 +2846,8 @@ async function handleFileUpload(event) {
       // Read based on file type
       if (file.type.startsWith('image/')) {
         reader.readAsDataURL(file);
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        reader.readAsArrayBuffer(file); // PDFs need binary data
       } else {
         reader.readAsText(file);
       }
