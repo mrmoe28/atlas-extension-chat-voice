@@ -2152,8 +2152,8 @@ Be helpful and conversational. When creating prompts, use the appropriate functi
               addMessage('assistant', '👁️ Vision disabled - no longer monitoring screen');
             } else if (functionName === 'web_click_element') {
               // Web automation: Click element
-              const webResult = await executeBrowserCommand('clickElement', { 
-                text: args.selector,
+              const webResult = await executeBrowserCommand('clickElement', {
+                selector: args.selector,
                 element_type: args.element_type || 'button'
               });
               if (webResult.success) {
