@@ -4,8 +4,10 @@
  */
 
 import { isNewerVersion } from './version-compare.js';
+import { ErrorHandler } from './error-handler.js';
 
-const UPDATE_API_URL = 'https://atlas-voice-extension.vercel.app/api/updates/check';
+// Check GitHub Releases directly instead of Vercel endpoint
+const GITHUB_RELEASES_API = 'https://api.github.com/repos/mrmoe28/atlas-extension-chat-voice/releases/latest';
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000; // 4 hours
 const UPDATE_ALARM_NAME = 'atlas-update-check';
 
@@ -63,7 +65,7 @@ export class UpdateManager {
   }
 
   /**
-   * Check for available updates
+   * Check for available updates with retry logic
    */
   async checkForUpdates() {
     if (this.isChecking) {
@@ -74,20 +76,74 @@ export class UpdateManager {
     this.isChecking = true;
 
     try {
-      console.log(`Checking for updates... Current version: ${this.currentVersion}`);
-
-      const response = await fetch(
-        `${UPDATE_API_URL}?currentVersion=${this.currentVersion}`
+      return await ErrorHandler.withRetry(
+        () => this._performUpdateCheck(),
+        3, // max retries
+        2000 // 2 second delay
       );
+    } catch (error) {
+      console.error('Update check failed after retries:', error);
+      return { 
+        error: 'Failed to check for updates after multiple attempts',
+        details: error.message,
+        canRetry: true
+      };
+    } finally {
+      this.isChecking = false;
+    }
+  }
+
+  /**
+   * Perform the actual update check using GitHub Releases API
+   */
+  async _performUpdateCheck() {
+    console.log(`Checking for updates... Current version: ${this.currentVersion}`);
+    console.log(`GitHub API: ${GITHUB_RELEASES_API}`);
+
+    // Add timeout and better error handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    try {
+      const response = await fetch(GITHUB_RELEASES_API, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': `Atlas-Extension/${this.currentVersion}`
+        }
+      });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Update check failed: ${response.status}`);
+        // 404 means no releases published yet - this is not an error
+        if (response.status === 404) {
+          console.log('No releases found on GitHub yet');
+          return { hasUpdate: false };
+        }
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Update check failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const updateInfo = await response.json();
-      console.log('Update check response:', updateInfo);
+      const release = await response.json();
+      console.log('GitHub release response:', release);
 
-      if (updateInfo.hasUpdate) {
+      // Extract version from tag_name (e.g., "v0.3.2" -> "0.3.2")
+      const latestVersion = release.tag_name.replace(/^v/, '');
+
+      // Find the .zip asset
+      const zipAsset = release.assets.find(asset => asset.name.endsWith('.zip'));
+
+      if (isNewerVersion(latestVersion, this.currentVersion)) {
+        const updateInfo = {
+          hasUpdate: true,
+          latestVersion: latestVersion,
+          downloadUrl: zipAsset?.browser_download_url || release.zipball_url,
+          releaseUrl: release.html_url,
+          releaseNotes: release.body || 'No release notes available',
+          publishedAt: release.published_at
+        };
+
         this.updateAvailable = updateInfo;
 
         // Store update info
@@ -99,23 +155,45 @@ export class UpdateManager {
         // Show notification
         await this.showUpdateNotification(updateInfo);
 
-        console.log(`Update available: v${updateInfo.latestVersion}`);
+        console.log(`Update available: v${latestVersion}`);
 
         return {
           hasUpdate: true,
-          version: updateInfo.latestVersion,
+          version: latestVersion,
           info: updateInfo
         };
       } else {
-        console.log('No updates available');
+        console.log('No updates available - running latest version');
         return { hasUpdate: false };
       }
 
     } catch (error) {
-      console.error('Update check error:', error);
-      return { error: error.message };
-    } finally {
-      this.isChecking = false;
+      clearTimeout(timeoutId);
+
+      // Enhanced error logging with more context
+      const errorDetails = {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        currentVersion: this.currentVersion,
+        apiUrl: GITHUB_RELEASES_API,
+        timestamp: new Date().toISOString()
+      };
+
+      console.error('Update check error:', errorDetails);
+
+      // Store error for debugging
+      try {
+        await chrome.storage.local.set({
+          'atlas-update-last-error': errorDetails,
+          'atlas-update-error-at': Date.now()
+        });
+      } catch (storageError) {
+        console.warn('Failed to store update error:', storageError);
+      }
+
+      // Throw error to be handled by retry logic
+      throw error;
     }
   }
 
