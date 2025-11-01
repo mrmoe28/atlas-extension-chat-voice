@@ -21,8 +21,14 @@ Keep responses brief (2-3 sentences) for voice conversations. Be natural and hel
     if (!apiKey) {
       throw new Error('Groq API key is required. Get one free at https://console.groq.com');
     }
+
+    // Validate API key format (Groq keys typically start with 'gsk_')
+    if (!apiKey.startsWith('gsk_')) {
+      console.warn('⚠️ API key does not start with "gsk_" - this may not be a valid Groq API key');
+    }
+
     this.apiKey = apiKey;
-    console.log('✅ Groq connector initialized');
+    console.log('✅ Groq connector initialized with API key:', apiKey.substring(0, 7) + '...');
   }
 
   /**
@@ -141,7 +147,15 @@ Keep responses brief (2-3 sentences) for voice conversations. Be natural and hel
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API error: ${response.statusText}`);
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error?.message || errorData.message || errorMessage;
+          console.error('❌ Groq API error response:', errorData);
+        } catch (e) {
+          console.error('❌ Could not parse error response');
+        }
+        throw new Error(`Groq API error: ${errorMessage}`);
       }
 
       const reader = response.body.getReader();
