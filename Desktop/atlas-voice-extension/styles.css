@@ -286,6 +286,17 @@ h1 {
   border-color: var(--brand);
 }
 
+.server-input.input-error {
+  border-color: var(--error);
+  animation: shake 0.4s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
 .mode-toggle {
   display: flex;
   align-items: center;

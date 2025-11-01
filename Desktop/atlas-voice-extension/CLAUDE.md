@@ -112,6 +112,7 @@ atlas-voice-extension/
 - `GET /api/ephemeral` - Returns OpenAI API credentials (key, model, endpoint)
 - `POST /api/desktop` - Desktop automation commands (file ops, system control)
 - `POST /api/vision` - GPT-4 Vision screenshot analysis
+- `POST /api/groq` - Groq API chat completions (FREE, uses llama-3.3-70b-versatile)
 
 **Knowledge Base API**:
 - `GET /api/knowledge?user_id=X` - Fetch memories, patterns, knowledge
@@ -147,7 +148,7 @@ atlas-voice-extension/
 **Voice Modes**:
 - **Push-to-Talk**: Hold button to speak
 - **Continuous**: Automatic VAD-based conversation
-- **Wake Word**: Not yet implemented (UI placeholder)
+- **Wake Word**: Say "Hey Atlas" to activate (auto-mutes after 10 seconds of inactivity)
 
 **Desktop Commander Mode**:
 - Executes system commands via `/api/desktop` endpoint
@@ -227,8 +228,9 @@ git push origin v0.2.1  # Triggers auto-release
 
 ### API Key Security
 - **NEVER expose keys in extension** - Server-side only
-- **Use environment variables** - Vercel env vars for OPENAI_API_KEY
+- **Use environment variables** - Vercel env vars for OPENAI_API_KEY and GROQ_API_KEY
 - **Credentials endpoint**: Extension fetches key from `/api/ephemeral`
+- **Local API keys**: Extension supports storing OpenAI keys locally in localStorage (user preference)
 
 ### Extension File Locations
 - **Root level**: Extension files live at repository root for easy user installation
@@ -245,6 +247,15 @@ git push origin v0.2.1  # Triggers auto-release
 - **Test production URL**: Verify hosted server after deployment
 - **Manual extension testing**: Load unpacked and test all features
 - **Check browser console**: Monitor for errors in extension and server logs
+- **Jest tests**: Run `npm test` for unit tests (lib/ folder)
+- **Playwright tests**: Visual and integration tests in `dev/tests/` (requires extension loaded)
+
+### AI Provider Management
+- **Multiple providers**: Supports OpenAI Realtime, Groq API, and Hugging Face
+- **Groq implementation**: FREE text chat via `POST /api/groq` with `llama-3.3-70b-versatile`
+- **Hugging Face**: Free alternative using GPT-2 model (lib/huggingface-connector.js)
+- **Provider switching**: UI dropdown in settings for user selection
+- **Graceful fallback**: Handle API errors and switch providers if needed
 
 ## Common Development Tasks
 
@@ -260,6 +271,27 @@ git push origin v0.2.1  # Triggers auto-release
 3. Implement database operations via `database.js` if needed
 4. Test endpoint locally, then deploy to Vercel
 
+### Adding a New AI Provider
+1. Create connector class in `lib/` (see `lib/huggingface-connector.js` as example)
+2. Add backend endpoint in `dev/server/server.js` (see `/api/groq` example)
+3. Update UI dropdown in `sidepanel.html` (AI Provider section)
+4. Add switching logic in `sidepanel.js`
+5. Test with various prompts and error scenarios
+6. Update documentation and error messages
+
+### Running Tests
+```bash
+# Jest unit tests (lib/ components)
+npm test
+npm run test:watch  # Watch mode
+
+# Playwright integration tests (requires extension loaded)
+cd dev/tests
+npx playwright test
+npx playwright test --ui  # Interactive mode
+npx playwright test --debug  # Debug mode
+```
+
 ### Updating OpenAI Realtime Model
 1. Update `OPENAI_REALTIME_MODEL` in Vercel environment variables
 2. Optional: Update default in `vercel.json`
@@ -271,6 +303,7 @@ git push origin v0.2.1  # Triggers auto-release
 3. **Check server logs** (Vercel dashboard or local terminal)
 4. **Verify API key** (server logs show first 7 chars)
 5. **Test microphone** (grant permissions, check settings)
+6. **Review ERROR_SOLUTIONS.md** for common errors and fixes
 
 ### Deploying a New Version
 ```bash
@@ -291,11 +324,113 @@ git push origin v0.2.1
 # Extension auto-updates within 4 hours
 ```
 
+### Fixing Vercel Deployment Issues
+```bash
+# Check current deployments
+vercel ls
+
+# Set correct alias if production URL broken
+vercel alias set <deployment-url> atlas-voice-extension.vercel.app
+
+# Verify environment variables are set
+# Check Vercel dashboard → Settings → Environment Variables
+# Required: OPENAI_API_KEY, GROQ_API_KEY, DATABASE_URL
+```
+
+## Key Technical Details
+
+### Extension Architecture Patterns
+- **Service Worker (background.js)**: Minimal logic, handles alarms for update checks
+- **Side Panel (sidepanel.js)**: Main application logic (~3,500 lines), handles:
+  - WebRTC connection to OpenAI Realtime API
+  - Browser Speech Recognition as fallback
+  - Web Speech Synthesis for text-to-speech
+  - AI provider switching (OpenAI, Groq, Hugging Face)
+  - localStorage for settings persistence
+  - Function calling for desktop commands
+- **Content Script (content.js)**: Injected into all pages for browser automation
+  - Click, type, scroll, form filling
+  - Screenshot capture
+  - Tab manipulation
+
+### State Management
+- **localStorage**: API keys, server URLs, voice mode preferences, AI provider selection
+- **chrome.storage.local**: Update notifications, error logs, extension state
+- **Global variables in sidepanel.js**: WebRTC connection state, audio contexts, conversation history
+
+### Audio Pipeline
+- **OpenAI Realtime**: getUserMedia() → WebRTC → OpenAI → Audio playback
+- **Browser Speech Fallback** (lib/web-speech-handler.js):
+  - Uses webkitSpeechRecognition for voice input
+  - Web Speech Synthesis for text-to-speech output
+  - Supports continuous and interim results
+  - Configurable language settings
+  - Used when OpenAI Realtime API unavailable or for non-OpenAI providers
+- **Groq/HuggingFace**: Browser Speech Recognition → Text API → Web Speech Synthesis
+
+### Error Handling
+- **lib/error-handler.js**: Centralized retry logic with exponential backoff (3 retries, 2s base delay)
+- **ERROR_SOLUTIONS.md**: Documents common errors, root causes, and solutions with code examples
+  - Update manager network errors
+  - Chrome extension permission errors
+  - Storage quota issues
+  - Development guidelines for logging and retry logic
+- **Graceful degradation**: Features fail independently without breaking extension
+- **Error storage**: Failed operations stored in chrome.storage.local for debugging
+
+### Recent Major Changes (v0.3.x)
+- Added local API key storage (users can use their own OpenAI keys)
+- Implemented Groq API integration (FREE alternative)
+- Added Hugging Face connector (FREE, uses GPT-2)
+- Enhanced web automation (click, type, fill forms by voice)
+- Fixed microphone permission handling issues
+- Improved error logging and user feedback
+
+## Code Organization & File Purposes
+
+### Core Extension Files (Root Level)
+- **sidepanel.js** - Main application logic, WebRTC, AI integration (~3,500 lines)
+  - DO NOT split into modules (breaks CSP compliance)
+  - Contains all voice interaction logic
+  - Handles provider switching, function calling, error handling
+- **background.js** - Service worker, update checks, extension lifecycle
+- **content.js** - Injected into web pages for automation (~1,500 lines)
+- **sidepanel.html** - Main UI, settings panel, conversation display
+- **styles.css** - All extension styling, themes, animations (~1,000 lines)
+
+### Library Files (lib/)
+**Note**: These ARE modular ES6 classes (export/import allowed in lib/ folder despite CSP restrictions on main extension files)
+- **update-manager.js** - Auto-update logic, GitHub Release API integration
+- **update-ui.js** - Update notification banner
+- **version-compare.js** - Semantic version comparison utility
+- **pdf.min.js** - PDF.js bundled (CSP-compliant, no CDN)
+- **huggingface-connector.js** - Hugging Face API integration (FREE AI provider, uses GPT-2)
+- **groq-connector.js** - Groq API integration (FREE, llama-3.3-70b-versatile)
+- **web-speech-handler.js** - Browser Web Speech API wrapper (fallback when OpenAI unavailable)
+- **error-handler.js** - Retry logic with exponential backoff (static utility class)
+
+### Server Files (dev/server/)
+- **server.js** - Express API, all endpoints (~700 lines)
+- **database.js** - NeonDB operations, memory/conversation storage
+- **package.json** - Server dependencies (separate from root)
+
+### Build System (dev/scripts/)
+- **build-extension.js** - Copies files to dist/, validates manifest
+- **bump-version.js** - Updates versions in manifest + package.json
+- **create-release.js** - Prepares GitHub release
+
+### Testing (dev/tests/)
+- **playwright.config.js** - Playwright test configuration
+- **test-*.spec.js** - Playwright integration tests for UI
+- **Root package.json** - Jest configuration for unit tests
+
 ## Important Notes
 
 - **Microphone permissions**: Extension must handle permission denied gracefully
-- **WebRTC connection**: Requires valid OPENAI_API_KEY from server
+- **WebRTC connection**: Requires valid OPENAI_API_KEY from server OR user's local key
 - **Screen capture**: Requires additional user permission prompt
 - **Cross-browser**: Currently Chrome-only (uses Chrome-specific APIs)
 - **Update mechanism**: GitHub Releases API used for version checking
 - **Server URL**: Configurable in settings, defaults to Vercel deployment
+- **localStorage persistence**: Settings persist across sessions but not in incognito mode
+- **CSP Compliance**: Cannot load external scripts or use eval() - all code must be bundled

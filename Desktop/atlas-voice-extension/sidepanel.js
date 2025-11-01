@@ -2,8 +2,9 @@
  * Atlas Voice - Minimal Interface with Hamburger Menu
  */
 
-// Import Groq and Web Speech handlers
+// Import AI connectors and Web Speech handlers
 import { groqConnector } from './lib/groq-connector.js';
+import { huggingFaceConnector } from './lib/huggingface-connector.js';
 import { webSpeechHandler } from './lib/web-speech-handler.js';
 
 // ===== Mic Permission + Stream Manager =====================================
@@ -396,6 +397,42 @@ function safeDataChannelSend(message) {
   }
 }
 
+// Helper function to sanitize Groq API key
+function sanitizeGroqKey(raw) {
+  if (!raw) return "";
+  // trim and strip wrapping quotes; tolerate accidental spaces/newlines
+  return raw.trim().replace(/^["'\s]+|["'\s]+$/g, "");
+}
+
+// Helper function to validate Groq API key format
+function isLikelyGroqKey(k) {
+  // Typical formats: gsk_... (Groq secret key). Keep check len > 20 as a soft guard.
+  return typeof k === "string" && /^gsk_/.test(k) && k.length > 20;
+}
+
+// Helper function to show API key error
+function showKeyError(msg) {
+  els.orbStatus.textContent = msg;
+  // Visually highlight the API key field and open settings
+  if (!isModalOpen) openSettingsModal();
+  els.apiKey?.classList.add("input-error");
+  try { els.apiKey?.focus(); els.apiKey?.select(); } catch {}
+  setTimeout(() => { els.apiKey?.classList.remove("input-error"); }, 1200);
+}
+
+// Helper function to sanitize Hugging Face token
+function sanitizeHFToken(raw) {
+  if (!raw) return "";
+  // trim and strip wrapping quotes; tolerate accidental spaces/newlines
+  return raw.trim().replace(/^["'\s]+|["'\s]+$/g, "");
+}
+
+// Helper function to validate Hugging Face token format
+function isLikelyHFToken(k) {
+  // HF tokens start with 'hf_' and are typically 40+ chars
+  return typeof k === "string" && /^hf_/.test(k) && k.length > 20;
+}
+
 function addMessage(role, content, messageType = 'text') {
   if (!content || content.trim() === '') return;
 
@@ -572,13 +609,19 @@ async function connectGroq() {
       throw new Error('Speech Synthesis not supported in this browser. Please use Chrome.');
     }
 
-    // Get API key from settings or use default free tier
-    groqApiKey = els.apiKey.value.trim();
-
-    if (!groqApiKey) {
-      els.orbStatus.textContent = 'Please enter Groq API key in settings';
-      throw new Error('Groq API key required. Get free key at https://console.groq.com');
+    // Validate and sanitize API key
+    groqApiKey = sanitizeGroqKey(els.apiKey.value);
+    if (!isLikelyGroqKey(groqApiKey)) {
+      showKeyError("Groq API key required. Paste a valid key from console.groq.com.");
+      return; // EXIT early; do not initialize or start anything
     }
+
+    // (Optional) save immediately if autoConnect is on
+    try {
+      if (localStorage.getItem("atlasVoice_autoConnect") === "true") {
+        localStorage.setItem("atlasVoice_groqApiKey", groqApiKey);
+      }
+    } catch {}
 
     // Initialize Groq connector
     await groqConnector.initialize(groqApiKey);
@@ -737,6 +780,203 @@ async function handleGroqConversation(userMessage) {
     addMessage('assistant', `Error: ${error.message}`);
     isSpeaking = false;
     updateOrbState();
+  }
+}
+
+// Handle Hugging Face conversation
+async function handleHuggingFaceConversation(userMessage) {
+  try {
+    showTypingIndicator();
+    isSpeaking = true;
+    updateOrbState();
+
+    // Get response from Hugging Face (streaming)
+    let fullResponse = '';
+
+    const result = await huggingFaceConnector.streamMessage(
+      userMessage,
+      (chunk) => {
+        // Handle streaming chunks (could update UI in real-time)
+        fullResponse += chunk;
+      },
+      async (completeMessage) => {
+        // Message complete
+        removeTypingIndicator();
+        addMessage('assistant', completeMessage);
+
+        // Speak the response using browser TTS (if not muted)
+        if (!isMuted) {
+          try {
+            await webSpeechHandler.speak(completeMessage);
+          } catch (speechError) {
+            console.error('TTS error:', speechError);
+          }
+        }
+
+        isSpeaking = false;
+        updateOrbState();
+
+        // Restart listening after speaking (continuous mode)
+        if (connected && isContinuousMode && currentAIProvider === 'huggingface') {
+          setTimeout(() => {
+            try {
+              console.log('🎤 Restarting listening after AI response...');
+              webSpeechHandler.startListening();
+            } catch (error) {
+              console.error('❌ Failed to restart listening:', error);
+            }
+          }, 500);
+        }
+      }
+    );
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+  } catch (error) {
+    console.error('❌ Hugging Face conversation error:', error);
+    removeTypingIndicator();
+    addMessage('assistant', `Error: ${error.message}`);
+    isSpeaking = false;
+    updateOrbState();
+  }
+}
+
+async function connectHuggingFace() {
+  try {
+    console.log('🤗 Connecting to Hugging Face...');
+
+    // Validate and sanitize API token
+    const hfToken = sanitizeHFToken(els.apiKey.value);
+    if (!isLikelyHFToken(hfToken)) {
+      showKeyError("Hugging Face token required. Get one free at huggingface.co/settings/tokens");
+      return; // EXIT early; do not initialize or start anything
+    }
+
+    // Save token if autoConnect is enabled
+    try {
+      if (localStorage.getItem("atlasVoice_autoConnect") === "true") {
+        localStorage.setItem("atlasVoice_hfToken", hfToken);
+      }
+    } catch {}
+
+    // Initialize Hugging Face connector
+    await huggingFaceConnector.initialize(hfToken);
+    console.log('✅ Hugging Face connector initialized');
+
+    // Request microphone permissions (same as Groq)
+    try {
+      console.log('🎤 Requesting microphone permissions...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ Microphone permission granted');
+
+      // Stop the stream immediately - we just needed the permission
+      stream.getTracks().forEach(track => track.stop());
+    } catch (permError) {
+      console.error('❌ Microphone permission denied:', permError);
+      els.orbStatus.textContent = 'Microphone access denied';
+      throw new Error('Microphone access is required. Please allow microphone access in your browser settings.');
+    }
+
+    // Initialize Web Speech API with continuous mode
+    webSpeechHandler.initialize({ continuous: true, lang: 'en-US' });
+    console.log('✅ Web Speech API initialized (continuous mode)');
+
+    // Set up speech recognition callbacks
+    webSpeechHandler.onResult((transcript, isFinal) => {
+      if (isFinal) {
+        currentUserMessage = transcript;
+        addMessage('user', transcript);
+
+        // Send to Hugging Face and get response
+        handleHuggingFaceConversation(transcript);
+      }
+    });
+
+    webSpeechHandler.onError((error) => {
+      console.error('🎤 Speech error:', error);
+
+      // Only show error if it's not a normal stop
+      if (error !== 'aborted' && error !== 'no-speech') {
+        els.orbStatus.textContent = `Speech error: ${error}`;
+      }
+
+      // Auto-restart on error (except for permission denied)
+      if (connected && isContinuousMode && currentAIProvider === 'huggingface' && !isSpeaking) {
+        if (error !== 'not-allowed' && error !== 'service-not-allowed') {
+          console.log(`🔄 Auto-restarting after error: ${error}`);
+          setTimeout(() => {
+            try {
+              webSpeechHandler.startListening();
+            } catch (restartError) {
+              console.error('❌ Failed to restart after error:', restartError);
+            }
+          }, 400);
+        }
+      }
+    });
+
+    webSpeechHandler.onStart(() => {
+      isListening = true;
+      updateOrbState();
+    });
+
+    webSpeechHandler.onEnd(() => {
+      isListening = false;
+      updateOrbState();
+
+      // Auto-restart if continuous mode and not currently speaking
+      if (connected && isContinuousMode && currentAIProvider === 'huggingface' && !isSpeaking) {
+        setTimeout(() => {
+          try {
+            console.log('🎤 Restarting listening (continuous mode)...');
+            webSpeechHandler.startListening();
+          } catch (error) {
+            console.error('❌ Failed to restart listening:', error);
+          }
+        }, 400);
+      }
+    });
+
+    // Success! Mark as connected
+    connected = true;
+    els.orbStatus.textContent = 'Connected - Listening...';
+
+    // Debug: Log which elements are undefined
+    console.log('🔍 Element check:', {
+      statusDot: !!els.statusDot,
+      interruptBtn: !!els.interruptBtn,
+      muteBtn: !!els.muteBtn,
+      textInput: !!els.textInput,
+      textSendBtn: !!els.textSendBtn,
+      connectBtn: !!els.connectBtn
+    });
+
+    // Safely update UI elements (some may not exist depending on configuration)
+    if (els.statusDot) els.statusDot.classList.add('connected');
+    if (els.interruptBtn) els.interruptBtn.disabled = false;
+    if (els.muteBtn) els.muteBtn.disabled = false;
+    if (els.textInput) els.textInput.disabled = false;
+    if (els.textSendBtn) els.textSendBtn.disabled = false;
+
+    els.connectBtn.textContent = 'Disconnect';
+    els.connectBtn.classList.add('connected');
+    updateOrbState();
+
+    // Start listening immediately in continuous mode
+    if (isContinuousMode) {
+      console.log('🎤 Starting continuous listening...');
+      webSpeechHandler.startListening();
+    }
+
+    console.log('✅ Hugging Face mode ready!');
+
+  } catch (error) {
+    console.error('❌ Hugging Face connection failed:', error);
+    els.orbStatus.textContent = `Connection failed: ${error.message}`;
+    connected = false;
+    els.connectBtn.textContent = 'Connect';
   }
 }
 
@@ -2392,8 +2632,23 @@ if (els.connectBtn) {
         currentAIProvider = els.aiProvider.value;
         console.log('🤖 Selected AI provider:', currentAIProvider);
 
+        // Provider guard for Groq
         if (currentAIProvider === 'groq') {
+          const raw = els.apiKey.value;
+          const key = sanitizeGroqKey(raw);
+          if (!isLikelyGroqKey(key)) {
+            showKeyError("Groq API key required. Paste a valid key from console.groq.com.");
+            return; // do not proceed
+          }
           await connectGroq();
+        } else if (currentAIProvider === 'huggingface') {
+          const raw = els.apiKey.value;
+          const token = sanitizeHFToken(raw);
+          if (!isLikelyHFToken(token)) {
+            showKeyError("Hugging Face token required. Get one free at huggingface.co/settings/tokens");
+            return; // do not proceed
+          }
+          await connectHuggingFace();
         } else {
           await connectRealtime();
         }
@@ -2776,8 +3031,10 @@ function loadSettings() {
   const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
   const savedAiProvider = localStorage.getItem('atlasVoice_aiProvider');
   const savedApiKey = localStorage.getItem('atlasVoice_apiKey');
+  const savedGroqKey = localStorage.getItem('atlasVoice_groqApiKey');
+  const savedHFToken = localStorage.getItem('atlasVoice_hfToken');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions, savedAutoConnect, savedAiProvider, savedApiKey: savedApiKey ? savedApiKey.substring(0, 7) + '...' : 'none' });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions, savedAutoConnect, savedAiProvider, savedApiKey: savedApiKey ? savedApiKey.substring(0, 7) + '...' : 'none', savedGroqKey: savedGroqKey ? savedGroqKey.substring(0, 7) + '...' : 'none', savedHFToken: savedHFToken ? savedHFToken.substring(0, 7) + '...' : 'none' });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -2833,9 +3090,19 @@ function loadSettings() {
     console.log('✅ AI Provider restored:', savedAiProvider);
   }
 
-  if (savedApiKey) {
-    els.apiKey.value = savedApiKey;
-    console.log('✅ API Key restored:', savedApiKey.substring(0, 7) + '...');
+  // Load the appropriate key based on provider
+  let keyToLoad = null;
+  if (savedAiProvider === 'groq' && savedGroqKey) {
+    keyToLoad = savedGroqKey;
+  } else if (savedAiProvider === 'huggingface' && savedHFToken) {
+    keyToLoad = savedHFToken;
+  } else {
+    keyToLoad = savedApiKey; // Fallback to generic key for OpenAI
+  }
+
+  if (keyToLoad) {
+    els.apiKey.value = keyToLoad;
+    console.log('✅ API Key/Token restored:', keyToLoad.substring(0, 7) + '...');
   }
 }
 
@@ -2866,6 +3133,26 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_autoConnect', String(settings.autoConnect));
   localStorage.setItem('atlasVoice_aiProvider', settings.aiProvider);
   localStorage.setItem('atlasVoice_apiKey', settings.apiKey);
+
+  // Only persist provider-specific keys if autoConnect is enabled
+  const autoConnectEnabled = localStorage.getItem("atlasVoice_autoConnect") === "true";
+  const currentProvider = els.aiProvider.value;
+
+  if (currentProvider === 'groq') {
+    const groqKey = sanitizeGroqKey(els.apiKey.value);
+    if (autoConnectEnabled && isLikelyGroqKey(groqKey)) {
+      localStorage.setItem("atlasVoice_groqApiKey", groqKey);
+    } else {
+      localStorage.removeItem("atlasVoice_groqApiKey");
+    }
+  } else if (currentProvider === 'huggingface') {
+    const hfToken = sanitizeHFToken(els.apiKey.value);
+    if (autoConnectEnabled && isLikelyHFToken(hfToken)) {
+      localStorage.setItem("atlasVoice_hfToken", hfToken);
+    } else {
+      localStorage.removeItem("atlasVoice_hfToken");
+    }
+  }
 
   console.log('✅ Settings saved');
 }
@@ -2991,12 +3278,39 @@ setTimeout(async () => {
       currentAIProvider = savedProvider;
 
       if (savedProvider === 'groq') {
+        const k = sanitizeGroqKey(localStorage.getItem("atlasVoice_groqApiKey") || els.apiKey.value);
+        if (!isLikelyGroqKey(k)) {
+          // Downgrade gracefully: open settings and ask for key instead of crashing
+          openSettingsModal();
+          showKeyError("Groq auto-connect paused: add your API key to continue.");
+          return; // do not attempt connectGroq
+        }
         await connectGroq();
 
         // Auto-start listening for Groq mode
         setTimeout(() => {
           try {
             console.log('🎤 Starting auto-listening (Groq mode)...');
+            webSpeechHandler.startListening();
+          } catch (error) {
+            console.error('❌ Failed to start listening:', error);
+            els.orbStatus.textContent = `Mic error: ${error.message}`;
+          }
+        }, 500);
+      } else if (savedProvider === 'huggingface') {
+        const k = sanitizeHFToken(localStorage.getItem("atlasVoice_hfToken") || els.apiKey.value);
+        if (!isLikelyHFToken(k)) {
+          // Downgrade gracefully: open settings and ask for token
+          openSettingsModal();
+          showKeyError("Hugging Face auto-connect paused: add your token to continue.");
+          return; // do not attempt connectHuggingFace
+        }
+        await connectHuggingFace();
+
+        // Auto-start listening for Hugging Face mode
+        setTimeout(() => {
+          try {
+            console.log('🎤 Starting auto-listening (Hugging Face mode)...');
             webSpeechHandler.startListening();
           } catch (error) {
             console.error('❌ Failed to start listening:', error);

@@ -59,3 +59,4 @@ test.describe('Hamburger Menu Tests', () => {
     await expect(svg).toBeVisible();
   });
 });
+

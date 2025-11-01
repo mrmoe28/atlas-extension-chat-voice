@@ -7,8 +7,8 @@ export class HuggingFaceConnector {
   constructor() {
     this.apiToken = null;
     this.baseUrl = 'https://api-inference.huggingface.co/models';
-    // Using Mistral 7B - fast, free, and unrestricted
-    this.model = 'mistralai/Mistral-7B-Instruct-v0.2';
+    // Using GPT-2 - simple, guaranteed to work, completely unrestricted
+    this.model = 'gpt2';
     this.conversationHistory = [];
     this.systemPrompt = `You are Atlas Voice, a helpful AI assistant. Be conversational, friendly, and concise.
 
