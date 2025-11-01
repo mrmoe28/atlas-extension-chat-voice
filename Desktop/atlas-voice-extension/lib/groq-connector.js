@@ -68,6 +68,11 @@ Keep responses brief (2-3 sentences) for voice conversations. Be natural and hel
     // Add user message to history
     this.addMessage('user', userMessage);
 
+    // Debug logging
+    console.log('🔑 Using API key:', this.apiKey.substring(0, 10) + '...');
+    console.log('🌐 Calling Groq API:', this.baseUrl);
+    console.log('📊 Model:', this.model);
+
     try {
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -89,6 +94,12 @@ Keep responses brief (2-3 sentences) for voice conversations. Be natural and hel
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('❌ Groq API error response:', JSON.stringify(error, null, 2));
+        console.error('❌ Full error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData: error
+        });
         throw new Error(`Groq API error: ${error.error?.message || response.statusText}`);
       }
 
@@ -127,6 +138,11 @@ Keep responses brief (2-3 sentences) for voice conversations. Be natural and hel
 
     this.addMessage('user', userMessage);
 
+    // Debug logging
+    console.log('🔑 Streaming with API key:', this.apiKey.substring(0, 10) + '...');
+    console.log('🌐 Calling Groq API (streaming):', this.baseUrl);
+    console.log('📊 Model:', this.model);
+
     try {
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -151,7 +167,12 @@ Keep responses brief (2-3 sentences) for voice conversations. Be natural and hel
         try {
           const errorData = await response.json();
           errorMessage = errorData.error?.message || errorData.message || errorMessage;
-          console.error('❌ Groq API error response:', errorData);
+          console.error('❌ Groq API error response:', JSON.stringify(errorData, null, 2));
+          console.error('❌ Full error details:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorData: errorData
+          });
         } catch (e) {
           console.error('❌ Could not parse error response');
         }
