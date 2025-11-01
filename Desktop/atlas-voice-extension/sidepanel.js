@@ -170,7 +170,9 @@ const els = {
   aiProvider: document.getElementById('aiProvider'),
   apiKey: document.getElementById('apiKey'),
   autoConnect: document.getElementById('autoConnect'),
-  muteBtn: document.getElementById('muteBtn')
+  muteBtn: document.getElementById('muteBtn'),
+  textInput: document.getElementById('textInput'),
+  textSendBtn: document.getElementById('textSendBtn')
 };
 
 let pc, micStream, dataChannel, remoteAudioEl, connected = false;
@@ -582,6 +584,22 @@ async function connectGroq() {
     await groqConnector.initialize(groqApiKey);
     console.log('✅ Groq API initialized');
 
+    // CRITICAL FIX: Request microphone permissions BEFORE Web Speech API
+    // Side panels in Chrome extensions need explicit getUserMedia() call
+    // to trigger permission dialog (Web Speech API alone won't show it)
+    try {
+      console.log('🎤 Requesting microphone permissions...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ Microphone permission granted');
+
+      // Stop the stream immediately - we just needed the permission
+      stream.getTracks().forEach(track => track.stop());
+    } catch (permError) {
+      console.error('❌ Microphone permission denied:', permError);
+      els.orbStatus.textContent = 'Microphone access denied';
+      throw new Error('Microphone access is required. Please allow microphone access in your browser settings.');
+    }
+
     // Initialize Web Speech API with continuous mode for auto-listening
     webSpeechHandler.initialize({ continuous: true, lang: 'en-US' });
     console.log('✅ Web Speech API initialized (continuous mode)');
@@ -648,6 +666,8 @@ async function connectGroq() {
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
     els.muteBtn.disabled = false;
+    els.textInput.disabled = false;
+    els.textSendBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
 
@@ -1628,6 +1648,8 @@ IMPORTANT:
     els.statusDot.classList.add('connected');
     els.interruptBtn.disabled = false;
     els.muteBtn.disabled = false;
+    els.textInput.disabled = false;
+    els.textSendBtn.disabled = false;
     els.connectBtn.textContent = 'Disconnect';
     els.connectBtn.classList.add('connected');
   } catch (err) {
@@ -1670,6 +1692,8 @@ function teardown() {
   els.statusDot.classList.remove('connected');
   els.interruptBtn.disabled = true;
   els.muteBtn.disabled = true;
+  els.textInput.disabled = true;
+  els.textSendBtn.disabled = true;
   els.connectBtn.textContent = 'Connect';
   els.connectBtn.classList.remove('connected');
   
@@ -2387,6 +2411,57 @@ els.interruptBtn.addEventListener('click', () => {
     updateOrbState();
   } catch (err) {
     console.error('Interrupt failed:', err);
+  }
+});
+
+// Text input send button
+els.textSendBtn.addEventListener('click', () => {
+  const message = els.textInput.value.trim();
+  if (!message || !connected) return;
+
+  // Clear input
+  els.textInput.value = '';
+
+  // Add user message to chat
+  addMessage('user', message);
+
+  // Send to AI provider
+  if (currentAIProvider === 'groq') {
+    handleGroqConversation(message);
+  } else {
+    // OpenAI Realtime mode - send text message via data channel
+    if (dataChannel && dataChannel.readyState === 'open') {
+      showTypingIndicator();
+
+      // Send user text message
+      safeDataChannelSend({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: message
+            }
+          ]
+        }
+      });
+
+      // Trigger AI response
+      safeDataChannelSend({ type: 'response.create' });
+    } else {
+      console.error('Data channel not ready');
+      els.orbStatus.textContent = 'Not connected to OpenAI';
+    }
+  }
+});
+
+// Text input Enter key handler
+els.textInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    els.textSendBtn.click();
   }
 });
 
