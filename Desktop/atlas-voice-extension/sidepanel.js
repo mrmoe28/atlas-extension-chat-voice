@@ -6,6 +6,7 @@
 import { groqConnector } from './lib/groq-connector.js';
 import { huggingFaceConnector } from './lib/huggingface-connector.js';
 import { webSpeechHandler } from './lib/web-speech-handler.js';
+import { localAI } from './lib/local-ai.js';
 
 // ===== Mic Permission + Stream Manager =====================================
 const MicPermission = (() => {
@@ -977,6 +978,160 @@ async function connectHuggingFace() {
     els.orbStatus.textContent = `Connection failed: ${error.message}`;
     connected = false;
     els.connectBtn.textContent = 'Connect';
+  }
+}
+
+// ===== Browser-Only Mode (No API Key Required) =====
+
+async function connectBrowserOnly() {
+  try {
+    console.log('🌐 Connecting in Browser-Only mode...');
+
+    // No API key needed!
+    els.orbStatus.textContent = 'Initializing browser-only mode...';
+
+    // Request microphone permissions
+    try {
+      console.log('🎤 Requesting microphone permissions...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ Microphone permission granted');
+
+      // Stop the stream immediately - we just needed the permission
+      stream.getTracks().forEach(track => track.stop());
+    } catch (permError) {
+      console.error('❌ Microphone permission denied:', permError);
+      els.orbStatus.textContent = 'Microphone access denied';
+      throw new Error('Microphone access is required. Please allow microphone access in your browser settings.');
+    }
+
+    // Initialize Web Speech API with continuous mode
+    webSpeechHandler.initialize({ continuous: true, lang: 'en-US' });
+    console.log('✅ Web Speech API initialized (continuous mode)');
+
+    // Set up speech recognition callbacks
+    webSpeechHandler.onResult((transcript, isFinal) => {
+      console.log('🎤 Speech recognized:', { transcript, isFinal });
+
+      if (isFinal && transcript.trim()) {
+        // Add user message to chat
+        addMessage('user', transcript);
+
+        // Stop listening while AI responds
+        webSpeechHandler.stopListening();
+
+        // Handle conversation with local AI
+        handleBrowserOnlyConversation(transcript);
+      }
+    });
+
+    webSpeechHandler.onError((error) => {
+      console.error('❌ Speech recognition error:', error);
+      els.orbStatus.textContent = `Speech error: ${error}`;
+    });
+
+    webSpeechHandler.onStart(() => {
+      console.log('🎤 Speech recognition started');
+      isListening = true;
+      updateOrbState();
+    });
+
+    webSpeechHandler.onEnd(() => {
+      console.log('🎤 Speech recognition ended');
+      isListening = false;
+      updateOrbState();
+
+      // Auto-restart in continuous mode if still connected
+      if (connected && isContinuousMode && currentAIProvider === 'browseronly') {
+        setTimeout(() => {
+          try {
+            console.log('🎤 Restarting listening (continuous mode)...');
+            webSpeechHandler.startListening();
+          } catch (error) {
+            console.error('❌ Failed to restart listening:', error);
+          }
+        }, 400);
+      }
+    });
+
+    // Mark as connected
+    connected = true;
+    els.orbStatus.textContent = 'Connected - Browser Only Mode (100% FREE)';
+    els.statusDot.classList.add('connected');
+    els.interruptBtn.disabled = false;
+    els.muteBtn.disabled = false;
+    els.textInput.disabled = false;
+    els.connectBtn.textContent = 'Disconnect';
+
+    // Show welcome message
+    addMessage('assistant', 'Hello! I\'m running in browser-only mode. I can answer basic questions, tell you the time and date, do simple math, and have friendly conversations. Say "help" to see what I can do!');
+
+    // Speak welcome message
+    if (!isMuted) {
+      try {
+        await webSpeechHandler.speak('Hello! I\'m running in browser only mode. Ask me anything!');
+      } catch (speechError) {
+        console.error('TTS error:', speechError);
+      }
+    }
+
+    // Start listening immediately in continuous mode
+    if (isContinuousMode) {
+      console.log('🎤 Starting continuous listening...');
+      webSpeechHandler.startListening();
+    }
+
+    console.log('✅ Browser-Only mode ready!');
+
+  } catch (error) {
+    console.error('❌ Browser-Only connection failed:', error);
+    els.orbStatus.textContent = `Connection failed: ${error.message}`;
+    connected = false;
+    els.connectBtn.textContent = 'Connect';
+  }
+}
+
+async function handleBrowserOnlyConversation(userMessage) {
+  try {
+    showTypingIndicator();
+    isSpeaking = true;
+    updateOrbState();
+
+    // Get response from local AI
+    const response = await localAI.generateResponse(userMessage);
+
+    removeTypingIndicator();
+    addMessage('assistant', response);
+
+    // Speak the response using browser TTS (if not muted)
+    if (!isMuted) {
+      try {
+        await webSpeechHandler.speak(response);
+      } catch (speechError) {
+        console.error('TTS error:', speechError);
+      }
+    }
+
+    isSpeaking = false;
+    updateOrbState();
+
+    // Restart listening after speaking (continuous mode)
+    if (connected && isContinuousMode && currentAIProvider === 'browseronly') {
+      setTimeout(() => {
+        try {
+          console.log('🎤 Restarting listening after AI response...');
+          webSpeechHandler.startListening();
+        } catch (error) {
+          console.error('❌ Failed to restart listening:', error);
+        }
+      }, 500);
+    }
+
+  } catch (error) {
+    console.error('❌ Browser-Only conversation error:', error);
+    removeTypingIndicator();
+    addMessage('assistant', `Error: ${error.message}`);
+    isSpeaking = false;
+    updateOrbState();
   }
 }
 
@@ -1975,6 +2130,21 @@ function setupContinuousMode() {
 els.aiProvider.addEventListener('change', () => {
   currentAIProvider = els.aiProvider.value;
   console.log('🔄 AI Provider changed to:', currentAIProvider);
+
+  // Hide/show API key field based on provider
+  const apiKeyContainer = els.apiKey.closest('.setting-item');
+  const serverUrlContainer = els.serverUrl.closest('.setting-item');
+
+  if (currentAIProvider === 'browseronly') {
+    // Browser-only mode doesn't need API key or server URL
+    if (apiKeyContainer) apiKeyContainer.style.display = 'none';
+    if (serverUrlContainer) serverUrlContainer.style.display = 'none';
+  } else {
+    // Show fields for other providers
+    if (apiKeyContainer) apiKeyContainer.style.display = '';
+    if (serverUrlContainer) serverUrlContainer.style.display = '';
+  }
+
   saveSettings();
 });
 
@@ -2632,8 +2802,10 @@ if (els.connectBtn) {
         currentAIProvider = els.aiProvider.value;
         console.log('🤖 Selected AI provider:', currentAIProvider);
 
-        // Provider guard for Groq
-        if (currentAIProvider === 'groq') {
+        // Connect based on selected provider
+        if (currentAIProvider === 'browseronly') {
+          await connectBrowserOnly();
+        } else if (currentAIProvider === 'groq') {
           const raw = els.apiKey.value;
           const key = sanitizeGroqKey(raw);
           if (!isLikelyGroqKey(key)) {
@@ -3103,6 +3275,20 @@ function loadSettings() {
   if (keyToLoad) {
     els.apiKey.value = keyToLoad;
     console.log('✅ API Key/Token restored:', keyToLoad.substring(0, 7) + '...');
+  }
+
+  // Hide/show API key fields based on loaded provider
+  const apiKeyContainer = els.apiKey.closest('.setting-item');
+  const serverUrlContainer = els.serverUrl.closest('.setting-item');
+
+  if (currentAIProvider === 'browseronly') {
+    // Browser-only mode doesn't need API key or server URL
+    if (apiKeyContainer) apiKeyContainer.style.display = 'none';
+    if (serverUrlContainer) serverUrlContainer.style.display = 'none';
+  } else {
+    // Show fields for other providers
+    if (apiKeyContainer) apiKeyContainer.style.display = '';
+    if (serverUrlContainer) serverUrlContainer.style.display = '';
   }
 }
 

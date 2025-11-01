@@ -251,7 +251,12 @@ git push origin v0.2.1  # Triggers auto-release
 - **Playwright tests**: Visual and integration tests in `dev/tests/` (requires extension loaded)
 
 ### AI Provider Management
-- **Multiple providers**: Supports OpenAI Realtime, Groq API, and Hugging Face
+- **Multiple providers**: Supports Browser-Only (local), OpenAI Realtime, Groq API, and Hugging Face
+- **Browser-Only mode**: 100% FREE, works offline, no API key required (lib/local-ai.js)
+  - Uses browser's Web Speech API for voice input/output
+  - Pattern-based local AI for basic conversations
+  - Answers time, date, math, help queries
+  - Complete privacy - nothing leaves the browser
 - **Groq implementation**: FREE text chat via `POST /api/groq` with `llama-3.3-70b-versatile`
 - **Hugging Face**: Free alternative using GPT-2 model (lib/huggingface-connector.js)
 - **Provider switching**: UI dropdown in settings for user selection
@@ -360,6 +365,11 @@ vercel alias set <deployment-url> atlas-voice-extension.vercel.app
 
 ### Audio Pipeline
 - **OpenAI Realtime**: getUserMedia() → WebRTC → OpenAI → Audio playback
+- **Browser-Only Mode** (lib/local-ai.js + lib/web-speech-handler.js):
+  - 100% browser-based, no external APIs
+  - webkitSpeechRecognition → Local AI pattern matching → Web Speech Synthesis
+  - Pattern-based responses (greetings, time, date, math, help)
+  - Completely private - no data sent to any server
 - **Browser Speech Fallback** (lib/web-speech-handler.js):
   - Uses webkitSpeechRecognition for voice input
   - Web Speech Synthesis for text-to-speech output
@@ -379,12 +389,14 @@ vercel alias set <deployment-url> atlas-voice-extension.vercel.app
 - **Error storage**: Failed operations stored in chrome.storage.local for debugging
 
 ### Recent Major Changes (v0.3.x)
+- **NEW**: Browser-Only Mode (100% FREE, no API key needed, works offline!)
 - Added local API key storage (users can use their own OpenAI keys)
 - Implemented Groq API integration (FREE alternative)
 - Added Hugging Face connector (FREE, uses GPT-2)
 - Enhanced web automation (click, type, fill forms by voice)
 - Fixed microphone permission handling issues
 - Improved error logging and user feedback
+- UI automatically hides API key fields when Browser-Only mode selected
 
 ## Code Organization & File Purposes
 
@@ -400,6 +412,7 @@ vercel alias set <deployment-url> atlas-voice-extension.vercel.app
 
 ### Library Files (lib/)
 **Note**: These ARE modular ES6 classes (export/import allowed in lib/ folder despite CSP restrictions on main extension files)
+- **local-ai.js** - Browser-only local AI (100% FREE, no API key needed, works offline)
 - **update-manager.js** - Auto-update logic, GitHub Release API integration
 - **update-ui.js** - Update notification banner
 - **version-compare.js** - Semantic version comparison utility
