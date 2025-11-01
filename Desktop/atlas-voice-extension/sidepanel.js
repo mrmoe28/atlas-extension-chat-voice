@@ -1731,6 +1731,19 @@ function setupContinuousMode() {
   console.log('⚠️ Manual continuous mode toggle disabled - auto-listening always active');
 }
 
+// AI Provider selection
+els.aiProvider.addEventListener('change', () => {
+  currentAIProvider = els.aiProvider.value;
+  console.log('🔄 AI Provider changed to:', currentAIProvider);
+  saveSettings();
+});
+
+// API Key input (save on change)
+els.apiKey.addEventListener('input', () => {
+  console.log('🔑 API Key updated');
+  saveSettings();
+});
+
 // Mode switching
 els.continuousMode.addEventListener('change', () => {
   isContinuousMode = els.continuousMode.checked;
@@ -2761,8 +2774,10 @@ function loadSettings() {
   const savedMemoryEnabled = localStorage.getItem('atlasVoice_memoryEnabled');
   const savedSpecialInstructions = localStorage.getItem('atlasVoice_specialInstructions');
   const savedAutoConnect = localStorage.getItem('atlasVoice_autoConnect');
+  const savedAiProvider = localStorage.getItem('atlasVoice_aiProvider');
+  const savedApiKey = localStorage.getItem('atlasVoice_apiKey');
 
-  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions, savedAutoConnect });
+  console.log('Settings:', { savedServerUrl, savedDesktopMode, savedContinuousMode, savedVisionMode, savedTemperature, savedMemoryEnabled, savedSpecialInstructions, savedAutoConnect, savedAiProvider, savedApiKey: savedApiKey ? savedApiKey.substring(0, 7) + '...' : 'none' });
 
   if (savedServerUrl) {
     els.serverUrl.value = savedServerUrl;
@@ -2811,6 +2826,17 @@ function loadSettings() {
     isContinuousMode = true;
     console.log('✅ Auto-connect enabled, continuous mode activated');
   }
+
+  if (savedAiProvider) {
+    els.aiProvider.value = savedAiProvider;
+    currentAIProvider = savedAiProvider;
+    console.log('✅ AI Provider restored:', savedAiProvider);
+  }
+
+  if (savedApiKey) {
+    els.apiKey.value = savedApiKey;
+    console.log('✅ API Key restored:', savedApiKey.substring(0, 7) + '...');
+  }
 }
 
 // Save settings to localStorage
@@ -2823,10 +2849,12 @@ function saveSettings() {
     temperature: els.temperatureSlider.value,
     memoryEnabled: els.memoryEnabled.checked,
     specialInstructions: els.specialInstructions.value,
-    autoConnect: els.autoConnect.checked
+    autoConnect: els.autoConnect.checked,
+    aiProvider: els.aiProvider.value,
+    apiKey: els.apiKey.value
   };
 
-  console.log('💾 Saving settings:', settings);
+  console.log('💾 Saving settings:', { ...settings, apiKey: settings.apiKey ? settings.apiKey.substring(0, 7) + '...' : 'none' });
 
   localStorage.setItem('atlasVoice_serverUrl', settings.serverUrl);
   localStorage.setItem('atlasVoice_desktopMode', String(settings.desktopMode));
@@ -2836,6 +2864,8 @@ function saveSettings() {
   localStorage.setItem('atlasVoice_memoryEnabled', String(settings.memoryEnabled));
   localStorage.setItem('atlasVoice_specialInstructions', settings.specialInstructions);
   localStorage.setItem('atlasVoice_autoConnect', String(settings.autoConnect));
+  localStorage.setItem('atlasVoice_aiProvider', settings.aiProvider);
+  localStorage.setItem('atlasVoice_apiKey', settings.apiKey);
 
   console.log('✅ Settings saved');
 }
