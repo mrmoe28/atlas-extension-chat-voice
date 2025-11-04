@@ -177,7 +177,6 @@ export default function DashboardPage() {
             onClick={() => fetchDashboardData(true)}
             disabled={isRefreshing}
             className="gap-2"
-            size="default"
           >
             <Icon name={isRefreshing ? "loader" : "rotate"} className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
             {isRefreshing ? "Refreshing..." : "Refresh"}
