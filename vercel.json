@@ -2,11 +2,19 @@
   "version": 2,
   "builds": [
     {
+      "src": "Desktop/qwen-api-gateway/server.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "Desktop/atlas-voice-extension/dev/server/server.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/(v1|health)(.*)",
+      "dest": "Desktop/qwen-api-gateway/server.js"
+    },
     {
       "src": "/api/(.*)",
       "dest": "Desktop/atlas-voice-extension/dev/server/server.js"
